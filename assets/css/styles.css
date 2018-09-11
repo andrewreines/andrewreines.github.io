@@ -1,8 +1,51 @@
 .container {
     display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+
+    /* background-image: url('../images/body.jpg'); */
+
+    font-family: "Raleway", sans-serif;
 }
 
 .header {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    /* background-color: #3498DB; */
+    color: #FFF;
     background-color: #3498DB;
-    color: white;
+}
+
+.name {
+    font-size: 2.0rem;
+    line-height: 1.2;
+    letter-spacing: -.1rem;
+    font-weight: 300;
+    text-align: center;
+    padding-top:2em;
+}
+
+.headline {
+    font-size: 1.5rem;
+    line-height: 1.2;
+    letter-spacing: -.1rem;
+    font-weight: 300;
+    text-align: center;
+
+    padding:2em 0;
+        
+}
+
+.navMain {
+    display: grid;
+    grid-template-columns: repeat(5,1fr);
+    grid-gap: 1em;
+    align-items: center;
+    text-align: center;
+
+}
+
+.content {
+    height: 10000px;
 }
