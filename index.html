@@ -16,13 +16,14 @@
 </head>
 </head>
 <body>
-	<div class="container">
+	<div class="container" id="container">
 
 		<header class="header">
 			<h1 class="name">Andrew Reines</h1>
-			<h2 class="headline">Software Developer and Data Engineer</h2>
+			<h2 class="headline">Software Developer &nbsp;&nbsp;|&nbsp;&nbsp; Data Engineer</h2>
+		</header>
 
-			<nav class="navbar">
+			<nav class="navbar" id="navbar">
 
 					<p class="navbar-toggle" id="js-navbar-toggle">
 						<i class="fas fa-bars"></i>
@@ -39,7 +40,7 @@
 							<a href="#" class="nav-links">Analytics</a>
 						</li>
 						<li>
-							<a href="#" class="nav-links">Resume</a>
+							<a href="#" class="nav-links">Résumé</a>
 						</li>
 						<li>
 							<a href="#" class="nav-links">Contact</a>
@@ -48,39 +49,122 @@
 			</nav>
 
 
-		</header>
-
-		<section class="content">
+		<section class="content" id="content">
 			<div class="home">
-				<h3>Home</h3>
+				<h3>About Me</h3>
+				<hr>
+				<img id='profilePic' src="assets/images/Me.jpg" alt="">
+				<p>I am a software developer and data engineer with a background in management information systems. I enjoy web programming and data engineering with a focus on cloud solutions.</p>
+
+				<p>In my free time, I enjoy hiking and exploring the PNW, playing strategy and competitive games and sports, and keeping up with the tech world.</p>
 			</div>
 			<div class="development">
 				<h3>Development</h3>
+				<hr>
+				<p>I've worked with a variety of programming languages and tools leading to a wide variety of interests.</p>
+				<p>D</p>
 			</div>
 			<div class="analytics">
-				<h3>Analytics</h3>
+				<h3>analytics</h3>
 			</div>
 			<div class="resume">
-				<h3>Resume</h3>
+				<h3>résumé</h3>
 			</div>
 			<div class="contact">
-				<h3>Contact</h3>
+				<h3>contact</h3>
 			</div>
 		</section>
+		<br>
+		<br>
+
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>		<br>
+		<br>
+
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>		<br>
+		<br>
+
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
 
 		<footer>
-
+			Andrew Reines 2020
 		</footer>
 	</div>
 
 	<script>
-
+	// Menu Toggle JS
 	let mainNav = document.getElementById('js-menu');
 	let navBarToggle = document.getElementById('js-navbar-toggle');
 
+	let contentDiv = document.getElementById('content');
+
 	navBarToggle.addEventListener('click', function () {
     	mainNav.classList.toggle('active');
+		contentDiv.classList.toggle('mobilePad');
 	});
+
+	// Sticky Nav JS
+	window.onscroll = function() {userScroll()};
+
+	var navbar = document.getElementById("navbar");
+	var bodyContainer = document.getElementById("container");
+	
+	var sticky = navbar.offsetTop;
+	console.log(sticky);
+	function userScroll() {
+		if (window.pageYOffset >= sticky) {
+			navbar.classList.add("sticky")
+		} else {
+			navbar.classList.remove("sticky");
+		}
+	}
 
 </script>
 </body>

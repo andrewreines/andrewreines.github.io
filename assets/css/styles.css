@@ -2,11 +2,7 @@
     display: grid;
     grid-template-columns: 1fr;
     grid-template-rows: auto;
-
-    /* background-image: url('../images/body.jpg'); */
-
     font-family: "Raleway", sans-serif;
-    
 }
 
 .header {
@@ -28,24 +24,27 @@
     line-height: 1.2;
     letter-spacing: -.1rem;
     text-align: center;
-    padding:0 0 2em 0;
+    padding:0 0 1em 0;
 }
 
 
 .navbar {
     font-size: 15px;
-    padding-bottom: 10px;
+    padding: 10px 0 10px 0;
+    background-color: #3498DB;
 }
 .navbar-toggle {
     cursor: pointer; 
     color: rgba(255,255,255,0.8);
     font-size: 24px;
     text-align: center;
+    margin:0;
 }
 .main-nav {
     list-style-type: none;
     display: none;
     padding: 0;
+    padding-bottom:0px;
 }
 .main-nav li {
     text-align: center;
@@ -59,11 +58,19 @@
     display: block;
 }
 @media screen and (min-width: 768px) {
+    .headline {
+        font-size: 1.4rem;
+        font-weight: 100;
+        line-height: 1.2;
+        letter-spacing: -.1rem;
+        text-align: center;
+        padding:0 0 2em 0;
+    }
+
     .navbar {
         display: flex;
         justify-content: center;
-        padding-bottom: 0;
-        height: 70px;
+        padding: 0;
         align-items: center;
     }
     .main-nav {
@@ -71,6 +78,7 @@
         margin-right: 30px;
         flex-direction: row;
         justify-content: flex-end;
+        padding-bottom:0px;
     }
     .main-nav li {
         margin: 0;
@@ -85,10 +93,34 @@
         color: rgba(255, 255, 255, 1);
     }
 
-
-
-
-.content {
-    height: 10000px;
 }
 
+.sticky {
+    position: fixed;
+    top: 0;
+    width: 100%;
+}
+
+.sticky + .content {
+    padding-top: 48px;
+}
+
+.sticky + .mobilePad {
+    padding-top: 222px;
+}
+
+
+
+.content > div > h3 {
+    color:#3498DB;
+    font-weight: 300;
+    font-size: x-large;
+    text-align: center;
+}
+
+#profilePic {
+    width: 10%;
+    border-radius: 50%;
+    padding: 5px;
+    border: 1px solid #3498DB;
+}
