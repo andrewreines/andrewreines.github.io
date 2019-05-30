@@ -93,6 +93,11 @@
         color: rgba(255, 255, 255, 1);
     }
 
+    .content {
+        padding: 0 9em 0 9em;
+    }
+    
+
 }
 
 .sticky {
@@ -109,18 +114,43 @@
     padding-top: 222px;
 }
 
-
+.content {
+    padding: 0 1.5em 0 1.5em;
+}
 
 .content > div > h3 {
     color:#3498DB;
     font-weight: 300;
     font-size: x-large;
     text-align: center;
+    margin: 5em 0 .5em 0;
 }
 
-#profilePic {
-    width: 10%;
-    border-radius: 50%;
-    padding: 5px;
-    border: 1px solid #3498DB;
+.home {
+    padding-top: 7em;
+}
+
+hr {
+    height: 1px;
+    color: #3498DB;
+    background-color: #3498DB;
+    border: none;
+    width: 70%;
+}
+
+.contentItem {
+    text-align: center;
+    
+}
+
+.contentItem > p {
+    font-size: 85%;
+    line-height: 250%;
+}
+
+
+
+footer {
+    background-color: #3498DB;
+    
 }
