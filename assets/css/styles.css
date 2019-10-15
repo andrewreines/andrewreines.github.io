@@ -123,11 +123,11 @@
     font-weight: 300;
     font-size: x-large;
     text-align: center;
-    margin: 5em 0 .5em 0;
+    margin: 4em 0 .5em 0;
 }
 
 .home {
-    padding-top: 7em;
+    
 }
 
 hr {
@@ -151,6 +151,11 @@ hr {
 
 
 footer {
+    margin-top: 1em;
     background-color: #3498DB;
-    
+    text-align: center;
+}
+
+#footer-text {
+
 }

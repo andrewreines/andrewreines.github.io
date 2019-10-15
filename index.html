@@ -8,8 +8,11 @@
 	<meta name=viewport content="width=device-width, initial-scale=1">
 	
 	<link rel="stylesheet" href="assets/css/normalize.css">
+
+	
 	<link href="https://fonts.googleapis.com/css?family=Raleway" rel="stylesheet">
 	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css" integrity="sha384-50oBUHEmvpQ+1lW4y57PTFmhCaXp0ML5d60M1M7uH2+nqUivzIebhndOJK28anvf" crossorigin="anonymous">
+	<script src="https://use.fontawesome.com/99b3b931ae.js"></script>
 	<link rel="stylesheet" href="assets/css/styles.css">
 
 	<link rel="icon" type="image/x-icon" href="favicon.ico" />
@@ -24,72 +27,55 @@
 			<h2 class="headline">Software Developer &nbsp;&nbsp;|&nbsp;&nbsp; Data Engineer</h2>
 		</header>
 
-			<nav class="navbar" id="navbar">
+		<nav class="navbar" id="navbar">
 
-					<p class="navbar-toggle" id="js-navbar-toggle">
-						<i class="fas fa-bars"></i>
-					</p>
+			<ul class="main-nav" id="js-menu">
+				<li>
+					<a href="#" class="nav-links">Home</a>
+				</li>
+				<li>
+					<a href="#resume" class="nav-links">Resume</a>
+				</li>
+				<li>
+					<a href="#contact" class="nav-links">Contact</a>
+				</li>
+			</ul>
 
-					<ul class="main-nav" id="js-menu">
-						<li>
-							<a href="#" class="nav-links">Home</a>
-						</li>
-						<li>
-							<a href="#" class="nav-links">Development</a>
-						</li>
-						<li>
-							<a href="#" class="nav-links">Analytics</a>
-						</li>
-						<li>
-							<a href="#" class="nav-links">Résumé</a>
-						</li>
-						<li>
-							<a href="#" class="nav-links">Contact</a>
-						</li>
-					</ul>
-			</nav>
+			<p class="navbar-toggle" id="js-navbar-toggle">
+				<i class="fas fa-bars"></i>
+			</p>
+		</nav>
 
 
 		<section class="content" id="content">
-			<div class="home contentItem">
+			<div class="home contentItem" id="home">
 				<h3>About Me</h3>
 				<hr>
 
-							<p>I am a software developer and data engineer with a background in management information systems. I enjoy web/internet technologies and data analysis with an emphasis on scalable cloud solutions.</p>
-							<p>In my free time, I enjoy hiking and exploring the PNW, playing strategy and competitive games and sports, and keeping up with the tech world.</p>
+				<p>Seattle-based solution developer with a focus on data, databases, and cloud technology.</p>
+				<p></p>
 
 			</div>
 
-			<div class="development contentItem">
-				<h3>Development</h3>
+			<div class="resume contentItem" id="resume">
+				<h3>Resume</h3>
 				<hr>
-				<p>I've worked with a variety of programming languages and tools leading to a wide variety of interests.</p>
-				<p>Some of the projects that I've worked on include:</p>
+				<p>Online PDF coming soon.</p>
+				<p>Feel free to reach out for an up-to-date copy.</p>
+
 			</div>
 
-			<div class="analytics contentItem">
-				<h3>Analytics</h3>
-				<hr>
-				<p>I sometimes find myself setting up and exploring data-related projects and challenges.</p>
-				<p>These are mostly for fun - but allow me to play around with some of the industry tools being used outside of my day-to-day.</p>
-			</div>
-			<div class="resume contentItem">
-				<h3>Résumé</h3>
-				<hr>
-				view html
-				download pdf
-				download word
-			</div>
-			<div class="contact contentItem">
+			<div class="contact contentItem" id="contact">
 				<h3>Contact</h3>
 				<hr>
-				email
-				linkedin
-				github
+				<p><a href="mailto:andrewreines@gmail.com<">andrewreines@gmail.com</a></p>
+				<p><a href="https://www.linkedin.com/in/andrewreines">linkedin.com/in/andrewreines</a></p>
+				<p><a href="https://github.com/andrewreines">github.com/andrewreines</a></p>
 			</div>
 		</section>
+
 		<footer>
-			Andrew Reines 2020
+			<p id="footer-text">Andrew Reines 2020</p>
 		</footer>
 	</div>
 
@@ -101,7 +87,7 @@
 	let contentDiv = document.getElementById('content');
 
 	navBarToggle.addEventListener('click', function () {
-    	mainNav.classList.toggle('active');
+		mainNav.classList.toggle('active');
 		contentDiv.classList.toggle('mobilePad');
 	});
 
