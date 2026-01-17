@@ -89,25 +89,33 @@
         // Create peer with room code as ID (prefixed to avoid collisions)
         var peerId = 'gr_' + this.roomCode;
 
-        this.peer = new Peer(peerId, {
-            debug: 0,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            }
-        });
+        try {
+            this.peer = new Peer(peerId, {
+                debug: 1, // Enable debug logging
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+        } catch (e) {
+            this.isConnecting = false;
+            this.onError({ type: 'peer_create_failed', message: 'Failed to create connection: ' + e.message });
+            return;
+        }
 
         // Set connection timeout
         this._connectionTimer = setTimeout(function() {
             if (self.isConnecting) {
+                console.warn('[Multiplayer] Connection timeout - no response from signaling server');
                 self._clearConnection();
                 self.onError({ type: 'timeout', message: 'Connection timed out. Please try again.' });
             }
         }, this.connectionTimeout);
 
         this.peer.on('open', function(id) {
+            console.log('[Multiplayer] Connected to signaling server, room:', self.roomCode);
             self._clearTimer();
             self.isConnecting = false;
             self.isConnected = true;
@@ -128,10 +136,12 @@
         });
 
         this.peer.on('error', function(err) {
+            console.error('[Multiplayer] Peer error:', err);
             self._handlePeerError(err);
         });
 
         this.peer.on('disconnected', function() {
+            console.warn('[Multiplayer] Disconnected from signaling server');
             if (self.isConnected) {
                 self.isConnected = false;
                 self.onDisconnected('peer_disconnected');
@@ -178,15 +188,21 @@
         this.roomCode = roomCode.toUpperCase();
 
         // Create peer with random ID
-        this.peer = new Peer({
-            debug: 0,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            }
-        });
+        try {
+            this.peer = new Peer({
+                debug: 1, // Enable debug logging
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+        } catch (e) {
+            this.isConnecting = false;
+            this.onError({ type: 'peer_create_failed', message: 'Failed to create connection: ' + e.message });
+            return;
+        }
 
         // Set connection timeout
         this._connectionTimer = setTimeout(function() {

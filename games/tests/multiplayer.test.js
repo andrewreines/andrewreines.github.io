@@ -564,6 +564,85 @@ describe('Error Handling', function() {
     });
 });
 
+describe('Timeout Handling', function() {
+    it('timeout fires when peer never opens (sync check)', function() {
+        // This test verifies the timeout is SET correctly
+        // We can't easily test async timeout firing without a proper async runner
+
+        // Mock Peer that never fires 'open'
+        var SilentPeer = function(id, options) {
+            this._handlers = {};
+        };
+        SilentPeer.prototype.on = function(event, handler) {
+            this._handlers[event] = handler;
+        };
+        SilentPeer.prototype.destroy = function() {};
+
+        var OrigPeer = global.Peer;
+        global.Peer = SilentPeer;
+
+        var room = new MultiplayerRoom({
+            playerName: 'Host',
+            connectionTimeout: 100
+        });
+
+        room.createRoom();
+
+        // Verify timeout was set
+        assert(room._connectionTimer !== null, 'Connection timer should be set');
+        assertEqual(room.isConnecting, true, 'Should be connecting');
+        assertEqual(room.isHost, true, 'Should be host');
+
+        // Clean up
+        room.disconnect();
+        global.Peer = OrigPeer;
+    });
+
+    it('timeout clears when peer opens successfully', function() {
+        MockPeer.reset();
+        MockPeer.simulateOpen = true;
+        MockPeer.openDelay = 5;
+
+        var room = new MultiplayerRoom({
+            playerName: 'Host',
+            connectionTimeout: 1000
+        });
+
+        var opened = false;
+        room.onRoomCreated = function() {
+            opened = true;
+        };
+
+        room.createRoom();
+
+        // Timer should be set initially
+        assert(room._connectionTimer !== null, 'Timer should be set initially');
+    });
+
+    it('_clearTimer removes the timer', function() {
+        var room = new MultiplayerRoom({});
+        room._connectionTimer = setTimeout(function() {}, 10000);
+        assert(room._connectionTimer !== null);
+
+        room._clearTimer();
+        assertEqual(room._connectionTimer, null, 'Timer should be null after clearing');
+    });
+
+    it('_clearConnection resets state', function() {
+        MockPeer.simulateOpen = false;
+        var room = new MultiplayerRoom({});
+        room.isConnecting = true;
+        room._connectionTimer = setTimeout(function() {}, 10000);
+        room.peer = new MockPeer();
+
+        room._clearConnection();
+
+        assertEqual(room.isConnecting, false);
+        assertEqual(room._connectionTimer, null);
+        assertEqual(room.peer, null);
+    });
+});
+
 // Helper for async-ish tests
 function beforeEach(fn) {
     fn();

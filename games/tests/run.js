@@ -163,6 +163,25 @@ eval(multiplayerCode);
 // Run tests
 console.log(`${colors.cyan}Running multiplayer framework tests...${colors.reset}`);
 
+// Suppress [Multiplayer] debug logs during tests but allow test output
+const originalLog = console.log;
+const originalWarn = console.warn;
+const originalError = console.error;
+
+console.log = function(...args) {
+    // Suppress [Multiplayer] debug logs
+    if (args[0] && typeof args[0] === 'string' && args[0].includes('[Multiplayer]')) return;
+    originalLog.apply(console, args);
+};
+console.warn = function(...args) {
+    if (args[0] && typeof args[0] === 'string' && args[0].includes('[Multiplayer]')) return;
+    originalWarn.apply(console, args);
+};
+console.error = function(...args) {
+    if (args[0] && typeof args[0] === 'string' && args[0].includes('[Multiplayer]')) return;
+    originalError.apply(console, args);
+};
+
 // Load and run test files
 const testFiles = fs.readdirSync(__dirname)
     .filter(f => f.endsWith('.test.js'))
