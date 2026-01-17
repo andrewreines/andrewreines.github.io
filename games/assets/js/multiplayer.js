@@ -246,7 +246,16 @@ class GameMultiplayer {
                     if (this.onPlayerJoined) {
                         this.onPlayerJoined({ playerId: conn.playerId, playerInfo: data.info });
                     }
+                    // Send acknowledgment back to guest so they know connection is ready
+                    this.sendTo(fromPeerId, { type: 'connectionReady' });
                 }
+                if (this.onConnectionReady) {
+                    this.onConnectionReady(fromPeerId);
+                }
+                break;
+
+            case 'connectionReady':
+                // Guest receives this after host confirms connection
                 if (this.onConnectionReady) {
                     this.onConnectionReady(fromPeerId);
                 }
