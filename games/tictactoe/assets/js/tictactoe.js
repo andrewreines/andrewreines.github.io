@@ -1,6 +1,7 @@
 /**
  * Tic Tac Toe Game
  * Supports local and online multiplayer
+ * Mobile-first design with QR code sharing
  */
 
 class TicTacToe {
@@ -15,15 +16,16 @@ class TicTacToe {
         this.winner = null;
         this.winningLine = null;
 
-        // Multiplayer with game type for proximity matching
+        // Multiplayer
         this.multiplayer = new GameMultiplayer({
             maxPlayers: 2,
-            codeLength: 12,
-            gameType: 'tictactoe',
-            proximityPrecision: 4 // ~100m grid cells
+            gameType: 'tictactoe'
         });
         this.mode = 'local';
         this.localPlayerId = 0;
+
+        // Base URL for sharing
+        this.baseUrl = 'https://www.andrewreines.com/games/tictactoe/';
 
         // Winning combinations
         this.winPatterns = [
@@ -35,6 +37,7 @@ class TicTacToe {
         this.initUI();
         this.setupMultiplayerCallbacks();
         this.bindEvents();
+        this.checkUrlForRoom();
     }
 
     initUI() {
@@ -59,30 +62,24 @@ class TicTacToe {
             onlineOptionsPanel: document.getElementById('online-options-panel'),
             onlineName: document.getElementById('online-name'),
             hostGameBtn: document.getElementById('host-game-btn'),
-            findGamesBtn: document.getElementById('find-games-btn'),
-            showCodeBtn: document.getElementById('show-code-btn'),
+            joinGameBtn: document.getElementById('join-game-btn'),
 
             // Host game panel
             hostGamePanel: document.getElementById('host-game-panel'),
             hostStatus: document.getElementById('host-status'),
             hostInfo: document.getElementById('host-info'),
             hostRoomCode: document.getElementById('host-room-code'),
-            copyHostCodeBtn: document.getElementById('copy-host-code-btn'),
+            qrCode: document.getElementById('qr-code'),
+            copyCodeBtn: document.getElementById('copy-code-btn'),
+            shareLinkBtn: document.getElementById('share-link-btn'),
             cancelHostBtn: document.getElementById('cancel-host-btn'),
 
-            // Find games panel
-            findGamesPanel: document.getElementById('find-games-panel'),
-            findStatus: document.getElementById('find-status'),
-            gamesList: document.getElementById('games-list'),
-            refreshGamesBtn: document.getElementById('refresh-games-btn'),
-            cancelFindBtn: document.getElementById('cancel-find-btn'),
-
-            // Code entry panel
-            codeEntryPanel: document.getElementById('code-entry-panel'),
+            // Join game panel
+            joinGamePanel: document.getElementById('join-game-panel'),
             roomCodeInput: document.getElementById('room-code-input'),
             connectRoomBtn: document.getElementById('connect-room-btn'),
             joinStatus: document.getElementById('join-status'),
-            backFromCodeBtn: document.getElementById('back-from-code-btn'),
+            backFromJoinBtn: document.getElementById('back-from-join-btn'),
 
             // Start buttons
             startLocalBtn: document.getElementById('start-local-btn'),
@@ -115,7 +112,7 @@ class TicTacToe {
         this.multiplayer.onPlayerJoined = (data) => {
             this.players[1].name = data.playerInfo.name;
             // Update host info panel
-            const waitingEl = this.ui.hostInfo.querySelector('.host-waiting');
+            const waitingEl = this.ui.hostInfo?.querySelector('.host-waiting');
             if (waitingEl) {
                 waitingEl.innerHTML = `<i class="fas fa-check"></i> ${data.playerInfo.name} joined! Starting game...`;
             }
@@ -141,21 +138,20 @@ class TicTacToe {
         };
 
         this.multiplayer.onConnectionError = (msg) => {
-            // Update join status in code entry panel
-            this.ui.joinStatus.textContent = msg;
-            this.ui.joinStatus.classList.remove('hidden');
-            // Also update find status if visible
-            this.ui.findStatus.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${msg}`;
+            if (this.ui.joinStatus) {
+                this.ui.joinStatus.textContent = msg;
+                this.ui.joinStatus.classList.remove('hidden');
+            }
         };
 
         this.multiplayer.onConnectionReady = () => {
-            this.ui.joinStatus.innerHTML = '<i class="fas fa-check"></i> Connected! Waiting for host to start...';
-            this.ui.findStatus.innerHTML = '<i class="fas fa-check"></i> Connected! Starting game...';
+            if (this.ui.joinStatus) {
+                this.ui.joinStatus.innerHTML = '<i class="fas fa-check"></i> Connected! Waiting for host to start...';
+            }
         };
     }
 
     bindEvents() {
-        // Helper function to safely add event listeners
         const addClickHandler = (element, handler, name) => {
             if (element) {
                 element.addEventListener('click', handler);
@@ -170,20 +166,16 @@ class TicTacToe {
 
         // Online options
         addClickHandler(this.ui.hostGameBtn, () => this.hostGame(), 'host-game-btn');
-        addClickHandler(this.ui.findGamesBtn, () => this.findNearbyGames(), 'find-games-btn');
-        addClickHandler(this.ui.showCodeBtn, () => this.showCodeEntryPanel(), 'show-code-btn');
+        addClickHandler(this.ui.joinGameBtn, () => this.showJoinPanel(), 'join-game-btn');
 
         // Host panel
         addClickHandler(this.ui.cancelHostBtn, () => this.cancelHost(), 'cancel-host-btn');
-        addClickHandler(this.ui.copyHostCodeBtn, () => this.copyHostCode(), 'copy-host-code-btn');
+        addClickHandler(this.ui.copyCodeBtn, () => this.copyRoomCode(), 'copy-code-btn');
+        addClickHandler(this.ui.shareLinkBtn, () => this.shareLink(), 'share-link-btn');
 
-        // Find games panel
-        addClickHandler(this.ui.refreshGamesBtn, () => this.findNearbyGames(), 'refresh-games-btn');
-        addClickHandler(this.ui.cancelFindBtn, () => this.showOnlineOptions(), 'cancel-find-btn');
-
-        // Code entry panel
+        // Join panel
         addClickHandler(this.ui.connectRoomBtn, () => this.connectToRoom(), 'connect-room-btn');
-        addClickHandler(this.ui.backFromCodeBtn, () => this.showOnlineOptions(), 'back-from-code-btn');
+        addClickHandler(this.ui.backFromJoinBtn, () => this.showOnlineOptions(), 'back-from-join-btn');
 
         // Start buttons
         addClickHandler(this.ui.startLocalBtn, () => this.startLocalGame(), 'start-local-btn');
@@ -205,6 +197,30 @@ class TicTacToe {
             this.ui.roomCodeInput.addEventListener('input', (e) => {
                 e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
             });
+
+            // Allow enter key to submit
+            this.ui.roomCodeInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.connectToRoom();
+                }
+            });
+        }
+    }
+
+    // Check URL for room parameter and auto-join
+    checkUrlForRoom() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomCode = urlParams.get('room');
+
+        if (roomCode && roomCode.length === 6) {
+            // Auto-switch to online mode and join room
+            this.selectMode('online');
+            this.showJoinPanel();
+            if (this.ui.roomCodeInput) {
+                this.ui.roomCodeInput.value = roomCode.toUpperCase();
+            }
+            // Small delay to let UI update, then auto-connect
+            setTimeout(() => this.connectToRoom(), 500);
         }
     }
 
@@ -217,20 +233,27 @@ class TicTacToe {
         if (this.ui.localSetup) this.ui.localSetup.classList.toggle('hidden', mode !== 'local');
         if (this.ui.onlineSetup) this.ui.onlineSetup.classList.toggle('hidden', mode !== 'online');
 
-        // Reset online panels - show main options
         if (mode === 'online') {
             this.showOnlineOptions();
         }
     }
 
-    // Show main online options panel
     showOnlineOptions() {
-        if (this.multiplayer) this.multiplayer.disconnect(); // Clean up any existing connection
+        if (this.multiplayer) this.multiplayer.disconnect();
         if (this.ui.onlineOptionsPanel) this.ui.onlineOptionsPanel.classList.remove('hidden');
         if (this.ui.hostGamePanel) this.ui.hostGamePanel.classList.add('hidden');
-        if (this.ui.findGamesPanel) this.ui.findGamesPanel.classList.add('hidden');
-        if (this.ui.codeEntryPanel) this.ui.codeEntryPanel.classList.add('hidden');
+        if (this.ui.joinGamePanel) this.ui.joinGamePanel.classList.add('hidden');
         if (this.ui.joinStatus) this.ui.joinStatus.classList.add('hidden');
+    }
+
+    showJoinPanel() {
+        if (this.ui.onlineOptionsPanel) this.ui.onlineOptionsPanel.classList.add('hidden');
+        if (this.ui.joinGamePanel) this.ui.joinGamePanel.classList.remove('hidden');
+        if (this.ui.joinStatus) this.ui.joinStatus.classList.add('hidden');
+        if (this.ui.roomCodeInput) {
+            this.ui.roomCodeInput.value = '';
+            this.ui.roomCodeInput.focus();
+        }
     }
 
     // Host a game
@@ -241,31 +264,107 @@ class TicTacToe {
         // Show host panel
         if (this.ui.onlineOptionsPanel) this.ui.onlineOptionsPanel.classList.add('hidden');
         if (this.ui.hostGamePanel) this.ui.hostGamePanel.classList.remove('hidden');
-        if (this.ui.hostStatus) this.ui.hostStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating room...';
+        if (this.ui.hostStatus) {
+            this.ui.hostStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating room...';
+            this.ui.hostStatus.classList.remove('hidden');
+        }
         if (this.ui.hostInfo) this.ui.hostInfo.classList.add('hidden');
 
         try {
-            let roomCode;
-
-            // Try to get location for proximity-based matching
-            try {
-                const location = await this.multiplayer.getLocation();
-                const proximityCode = this.multiplayer.generateProximityCode(location.lat, location.lng);
-                roomCode = await this.multiplayer.initAsHostWithCode(proximityCode, { name: playerName });
-            } catch (locationErr) {
-                // Location unavailable - use random room code instead
-                console.log('Location unavailable, using random room code:', locationErr.message);
-                roomCode = await this.multiplayer.initAsHost({ name: playerName });
-            }
-
+            const roomCode = await this.multiplayer.initAsHost({ name: playerName });
             this.localPlayerId = 0;
+
             if (this.ui.hostStatus) this.ui.hostStatus.classList.add('hidden');
             if (this.ui.hostInfo) this.ui.hostInfo.classList.remove('hidden');
             if (this.ui.hostRoomCode) this.ui.hostRoomCode.textContent = roomCode;
+
+            // Generate QR code
+            this.generateQRCode(roomCode);
+
         } catch (err) {
             console.error('Host error:', err);
-            if (this.ui.hostStatus) this.ui.hostStatus.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${err.message || 'Failed to create room'}`;
+            if (this.ui.hostStatus) {
+                this.ui.hostStatus.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${err.message || 'Failed to create room'}`;
+            }
         }
+    }
+
+    // Generate QR code for room
+    generateQRCode(roomCode) {
+        const url = `${this.baseUrl}?room=${roomCode}`;
+
+        if (this.ui.qrCode && typeof QRCode !== 'undefined') {
+            // Clear any existing QR code
+            this.ui.qrCode.innerHTML = '';
+
+            QRCode.toCanvas(this.ui.qrCode, url, {
+                width: 150,
+                margin: 2,
+                color: {
+                    dark: '#1a1a2e',
+                    light: '#ffffff'
+                }
+            }, (error) => {
+                if (error) {
+                    console.error('QR Code generation error:', error);
+                    // Fallback: just show the URL
+                    this.ui.qrCode.innerHTML = `<small style="word-break: break-all;">${url}</small>`;
+                }
+            });
+        }
+    }
+
+    // Copy room code to clipboard
+    copyRoomCode() {
+        const code = this.ui.hostRoomCode?.textContent || '';
+        navigator.clipboard.writeText(code).then(() => {
+            if (this.ui.copyCodeBtn) {
+                const originalHTML = this.ui.copyCodeBtn.innerHTML;
+                this.ui.copyCodeBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(() => {
+                    if (this.ui.copyCodeBtn) {
+                        this.ui.copyCodeBtn.innerHTML = originalHTML;
+                    }
+                }, 2000);
+            }
+        });
+    }
+
+    // Share link using Web Share API or clipboard
+    shareLink() {
+        const code = this.ui.hostRoomCode?.textContent || '';
+        const url = `${this.baseUrl}?room=${code}`;
+
+        // Try Web Share API first (works great on mobile)
+        if (navigator.share) {
+            navigator.share({
+                title: 'Join my Tic Tac Toe game!',
+                text: `Join my game with code: ${code}`,
+                url: url
+            }).catch((err) => {
+                // User cancelled or error - fall back to clipboard
+                if (err.name !== 'AbortError') {
+                    this.copyLinkToClipboard(url);
+                }
+            });
+        } else {
+            // Fallback to clipboard
+            this.copyLinkToClipboard(url);
+        }
+    }
+
+    copyLinkToClipboard(url) {
+        navigator.clipboard.writeText(url).then(() => {
+            if (this.ui.shareLinkBtn) {
+                const originalHTML = this.ui.shareLinkBtn.innerHTML;
+                this.ui.shareLinkBtn.innerHTML = '<i class="fas fa-check"></i> Link Copied!';
+                setTimeout(() => {
+                    if (this.ui.shareLinkBtn) {
+                        this.ui.shareLinkBtn.innerHTML = originalHTML;
+                    }
+                }, 2000);
+            }
+        });
     }
 
     // Cancel hosting
@@ -274,101 +373,13 @@ class TicTacToe {
         this.showOnlineOptions();
     }
 
-    // Copy host room code
-    copyHostCode() {
-        const code = this.ui.hostRoomCode?.textContent || '';
-        navigator.clipboard.writeText(code).then(() => {
-            if (this.ui.copyHostCodeBtn) {
-                this.ui.copyHostCodeBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-                setTimeout(() => {
-                    if (this.ui.copyHostCodeBtn) {
-                        this.ui.copyHostCodeBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
-                    }
-                }, 2000);
-            }
-        });
-    }
-
-    // Find nearby games
-    async findNearbyGames() {
-        const playerName = (this.ui.onlineName?.value?.trim()) || 'Player 2';
-        this.players[1].name = playerName;
-
-        // Show find panel
-        if (this.ui.onlineOptionsPanel) this.ui.onlineOptionsPanel.classList.add('hidden');
-        if (this.ui.findGamesPanel) this.ui.findGamesPanel.classList.remove('hidden');
-        if (this.ui.findStatus) {
-            this.ui.findStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Getting your location...';
-            this.ui.findStatus.classList.remove('hidden');
-        }
-        if (this.ui.gamesList) this.ui.gamesList.classList.add('hidden');
-        if (this.ui.refreshGamesBtn) this.ui.refreshGamesBtn.classList.add('hidden');
-
-        let location;
-        try {
-            location = await this.multiplayer.getLocation();
-        } catch (locationErr) {
-            // Location unavailable - guide user to use room code instead
-            console.log('Location unavailable for nearby search:', locationErr.message);
-            if (this.ui.findStatus) {
-                this.ui.findStatus.innerHTML = '<i class="fas fa-info-circle"></i> Location unavailable. Ask the host for their room code and use "Enter Code" to join.';
-            }
-            if (this.ui.refreshGamesBtn) this.ui.refreshGamesBtn.classList.remove('hidden');
-            return;
-        }
-
-        try {
-            if (this.ui.findStatus) this.ui.findStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching for nearby games...';
-
-            // Get all proximity codes to search
-            const codes = this.multiplayer.getAdjacentProximityCodes(location.lat, location.lng);
-
-            // Try to find any active room
-            let foundRoom = null;
-            for (const code of codes) {
-                try {
-                    const exists = await this.multiplayer.checkRoomExists(code);
-                    if (exists) {
-                        foundRoom = code;
-                        break;
-                    }
-                } catch (e) {
-                    // Room doesn't exist, continue
-                }
-            }
-
-            if (foundRoom) {
-                if (this.ui.findStatus) this.ui.findStatus.innerHTML = '<i class="fas fa-check"></i> Found a game! Connecting...';
-
-                // Join the room
-                await this.multiplayer.initAsGuest(foundRoom, { name: playerName });
-                this.localPlayerId = 1;
-            } else {
-                if (this.ui.findStatus) this.ui.findStatus.innerHTML = '<i class="fas fa-info-circle"></i> No nearby games found';
-                if (this.ui.refreshGamesBtn) this.ui.refreshGamesBtn.classList.remove('hidden');
-            }
-        } catch (err) {
-            console.error('Find games error:', err);
-            if (this.ui.findStatus) this.ui.findStatus.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${err.message || 'Failed to search'}`;
-            if (this.ui.refreshGamesBtn) this.ui.refreshGamesBtn.classList.remove('hidden');
-        }
-    }
-
-    // Show code entry panel
-    showCodeEntryPanel() {
-        if (this.ui.onlineOptionsPanel) this.ui.onlineOptionsPanel.classList.add('hidden');
-        if (this.ui.codeEntryPanel) this.ui.codeEntryPanel.classList.remove('hidden');
-        if (this.ui.joinStatus) this.ui.joinStatus.classList.add('hidden');
-        if (this.ui.roomCodeInput) this.ui.roomCodeInput.value = '';
-    }
-
     // Connect to room by code
     async connectToRoom() {
         const roomCode = (this.ui.roomCodeInput?.value?.trim() || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-        if (!roomCode || roomCode.length !== 12) {
+        if (!roomCode || roomCode.length !== 6) {
             if (this.ui.joinStatus) {
-                this.ui.joinStatus.textContent = 'Please enter a valid 12-character room code';
+                this.ui.joinStatus.textContent = 'Please enter a valid 6-character room code';
                 this.ui.joinStatus.classList.remove('hidden');
             }
             return;
@@ -444,7 +455,9 @@ class TicTacToe {
     updateTurnIndicator() {
         const player = this.players[this.currentPlayer];
         const symbolClass = player.symbol.toLowerCase();
-        if (this.ui.turnIndicator) this.ui.turnIndicator.innerHTML = `<span class="player-symbol ${symbolClass}">${player.symbol}</span> ${player.name}'s Turn`;
+        if (this.ui.turnIndicator) {
+            this.ui.turnIndicator.innerHTML = `<span class="player-symbol ${symbolClass}">${player.symbol}</span> ${player.name}'s Turn`;
+        }
     }
 
     updateActivePlayer() {
@@ -612,20 +625,18 @@ class TicTacToe {
         if (this.ui.gameScreen) this.ui.gameScreen.classList.remove('active');
         if (this.ui.setupScreen) this.ui.setupScreen.classList.add('active');
 
-        // Reset online UI - show main options panel
-        if (this.ui.onlineOptionsPanel) this.ui.onlineOptionsPanel.classList.remove('hidden');
-        if (this.ui.hostGamePanel) this.ui.hostGamePanel.classList.add('hidden');
-        if (this.ui.findGamesPanel) this.ui.findGamesPanel.classList.add('hidden');
-        if (this.ui.codeEntryPanel) this.ui.codeEntryPanel.classList.add('hidden');
-        if (this.ui.joinStatus) this.ui.joinStatus.classList.add('hidden');
+        // Reset online UI
+        this.showOnlineOptions();
         if (this.ui.roomCodeInput) this.ui.roomCodeInput.value = '';
+
+        // Clear URL parameter
+        const url = new URL(window.location);
+        url.searchParams.delete('room');
+        window.history.replaceState({}, '', url);
     }
 }
 
 // Initialize game when DOM is ready
-// Use robust initialization that handles both cases:
-// 1. DOM already parsed (readyState is 'interactive' or 'complete')
-// 2. DOM still loading (wait for DOMContentLoaded)
 function initGame() {
     try {
         window.game = new TicTacToe();
@@ -638,6 +649,5 @@ function initGame() {
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initGame);
 } else {
-    // DOM already ready, initialize immediately
     initGame();
 }
