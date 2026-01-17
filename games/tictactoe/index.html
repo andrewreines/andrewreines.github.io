@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tic Tac Toe | Game Arcade</title>
+    <meta name="description" content="Play Tic Tac Toe online or locally with a friend">
+    <link rel="stylesheet" href="../../assets/css/normalize.css">
+    <link href="https://fonts.googleapis.com/css?family=Raleway:300,400,600,700" rel="stylesheet">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css">
+    <link rel="stylesheet" href="assets/css/tictactoe.css">
+    <link rel="icon" type="image/x-icon" href="../../favicon.ico">
+</head>
+<body>
+    <div class="game-wrapper">
+        <!-- Setup Screen -->
+        <div id="setup-screen" class="screen active">
+            <div class="setup-container">
+                <header class="setup-header">
+                    <a href="../" class="back-link"><i class="fas fa-arrow-left"></i> Back to Games</a>
+                    <h1>Tic Tac Toe</h1>
+                    <p>Classic X's and O's for 2 players</p>
+                </header>
+
+                <div class="mode-selection">
+                    <h2>Select Game Mode</h2>
+                    <div class="mode-buttons">
+                        <button id="local-mode-btn" class="mode-btn active">
+                            <i class="fas fa-users"></i>
+                            <span>Local Play</span>
+                            <small>Play on one device</small>
+                        </button>
+                        <button id="online-mode-btn" class="mode-btn">
+                            <i class="fas fa-globe"></i>
+                            <span>Online Play</span>
+                            <small>Play with a friend remotely</small>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Local Setup -->
+                <div id="local-setup" class="setup-section">
+                    <div class="player-names">
+                        <div class="player-name-input">
+                            <span class="player-symbol x">X</span>
+                            <input type="text" id="player1-name" placeholder="Player 1" maxlength="15">
+                        </div>
+                        <div class="player-name-input">
+                            <span class="player-symbol o">O</span>
+                            <input type="text" id="player2-name" placeholder="Player 2" maxlength="15">
+                        </div>
+                    </div>
+                    <button id="start-local-btn" class="btn btn-primary btn-large">
+                        <i class="fas fa-play"></i> Start Game
+                    </button>
+                </div>
+
+                <!-- Online Setup -->
+                <div id="online-setup" class="setup-section hidden">
+                    <div class="online-options">
+                        <button id="create-room-btn" class="btn btn-primary">
+                            <i class="fas fa-plus-circle"></i> Create Room
+                        </button>
+                        <button id="join-room-btn" class="btn btn-secondary">
+                            <i class="fas fa-sign-in-alt"></i> Join Room
+                        </button>
+                    </div>
+
+                    <!-- Create Room -->
+                    <div id="create-room-panel" class="online-panel hidden">
+                        <h3>Create a Room</h3>
+                        <div class="form-group">
+                            <label>Your Name</label>
+                            <input type="text" id="host-name" placeholder="Enter your name" maxlength="15">
+                        </div>
+                        <button id="generate-room-btn" class="btn btn-primary">
+                            <i class="fas fa-key"></i> Create Room
+                        </button>
+                        <div id="room-code-display" class="room-code-display hidden">
+                            <p>Share this code with your friend:</p>
+                            <div class="room-code" id="room-code"></div>
+                            <button id="copy-code-btn" class="btn btn-small">
+                                <i class="fas fa-copy"></i> Copy Code
+                            </button>
+                            <div id="waiting-status" class="waiting-status">
+                                <i class="fas fa-spinner fa-spin"></i> Waiting for opponent...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Join Room -->
+                    <div id="join-room-panel" class="online-panel hidden">
+                        <h3>Join a Room</h3>
+                        <div class="form-group">
+                            <label>Your Name</label>
+                            <input type="text" id="join-name" placeholder="Enter your name" maxlength="15">
+                        </div>
+                        <div class="form-group">
+                            <label>Room Code (12 characters)</label>
+                            <input type="text" id="room-code-input" placeholder="Enter code" maxlength="12">
+                        </div>
+                        <button id="connect-room-btn" class="btn btn-primary">
+                            <i class="fas fa-plug"></i> Join Room
+                        </button>
+                        <div id="join-status" class="join-status hidden"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+            <div class="game-container">
+                <header class="game-header">
+                    <button id="back-btn" class="icon-btn"><i class="fas fa-arrow-left"></i></button>
+                    <div class="turn-indicator" id="turn-indicator">
+                        <span class="player-symbol x">X</span>'s Turn
+                    </div>
+                    <button id="restart-btn" class="icon-btn"><i class="fas fa-redo"></i></button>
+                </header>
+
+                <div class="players-bar">
+                    <div class="player-info" id="player-x">
+                        <span class="player-symbol x">X</span>
+                        <span class="player-name" id="player-x-name">Player 1</span>
+                        <span class="player-score" id="player-x-score">0</span>
+                    </div>
+                    <div class="vs">VS</div>
+                    <div class="player-info" id="player-o">
+                        <span class="player-symbol o">O</span>
+                        <span class="player-name" id="player-o-name">Player 2</span>
+                        <span class="player-score" id="player-o-score">0</span>
+                    </div>
+                </div>
+
+                <div class="board-container">
+                    <div class="board" id="board">
+                        <div class="cell" data-cell="0"></div>
+                        <div class="cell" data-cell="1"></div>
+                        <div class="cell" data-cell="2"></div>
+                        <div class="cell" data-cell="3"></div>
+                        <div class="cell" data-cell="4"></div>
+                        <div class="cell" data-cell="5"></div>
+                        <div class="cell" data-cell="6"></div>
+                        <div class="cell" data-cell="7"></div>
+                        <div class="cell" data-cell="8"></div>
+                    </div>
+                    <div class="win-line" id="win-line"></div>
+                </div>
+
+                <div id="game-result" class="game-result hidden">
+                    <div class="result-text" id="result-text"></div>
+                    <button id="play-again-btn" class="btn btn-primary">
+                        <i class="fas fa-redo"></i> Play Again
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="../assets/js/multiplayer.js"></script>
+    <script src="assets/js/tictactoe.js"></script>
+</body>
+</html>
