@@ -15,8 +15,13 @@ class TicTacToe {
         this.winner = null;
         this.winningLine = null;
 
-        // Multiplayer
-        this.multiplayer = new GameMultiplayer({ maxPlayers: 2, codeLength: 12 });
+        // Multiplayer with game type for proximity matching
+        this.multiplayer = new GameMultiplayer({
+            maxPlayers: 2,
+            codeLength: 12,
+            gameType: 'tictactoe',
+            proximityPrecision: 4 // ~100m grid cells
+        });
         this.mode = 'local';
         this.localPlayerId = 0;
 
@@ -49,6 +54,15 @@ class TicTacToe {
             // Player inputs (local)
             player1Name: document.getElementById('player1-name'),
             player2Name: document.getElementById('player2-name'),
+
+            // Proximity mode
+            proximityPanel: document.getElementById('proximity-panel'),
+            proximityName: document.getElementById('proximity-name'),
+            findNearbyBtn: document.getElementById('find-nearby-btn'),
+            proximityStatus: document.getElementById('proximity-status'),
+            showManualBtn: document.getElementById('show-manual-btn'),
+            manualOptions: document.getElementById('manual-options'),
+            backToProximityBtn: document.getElementById('back-to-proximity-btn'),
 
             // Online host
             createRoomBtn: document.getElementById('create-room-btn'),
@@ -123,10 +137,33 @@ class TicTacToe {
         this.multiplayer.onConnectionError = (msg) => {
             this.ui.joinStatus.textContent = msg;
             this.ui.joinStatus.classList.remove('hidden');
+            // Also update proximity status if visible
+            this.ui.proximityStatus.textContent = msg;
         };
 
         this.multiplayer.onConnectionReady = () => {
             this.ui.joinStatus.innerHTML = '<i class="fas fa-check"></i> Connected! Waiting for host to start...';
+            this.ui.proximityStatus.innerHTML = '<i class="fas fa-check"></i> Connected! Waiting for opponent...';
+        };
+
+        // Proximity callbacks
+        this.multiplayer.onProximitySearching = () => {
+            this.ui.proximityStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching for nearby players...';
+            this.ui.proximityStatus.classList.remove('hidden');
+            this.ui.findNearbyBtn.disabled = true;
+        };
+
+        this.multiplayer.onProximityFound = (data) => {
+            if (data.asHost) {
+                this.ui.proximityStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Waiting for nearby players to join...';
+            } else {
+                this.ui.proximityStatus.innerHTML = '<i class="fas fa-check"></i> Found a player! Connecting...';
+            }
+        };
+
+        this.multiplayer.onProximityNotFound = (msg) => {
+            this.ui.proximityStatus.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${msg}`;
+            this.ui.findNearbyBtn.disabled = false;
         };
     }
 
@@ -134,6 +171,11 @@ class TicTacToe {
         // Mode selection
         this.ui.localModeBtn.addEventListener('click', () => this.selectMode('local'));
         this.ui.onlineModeBtn.addEventListener('click', () => this.selectMode('online'));
+
+        // Proximity mode
+        this.ui.findNearbyBtn.addEventListener('click', () => this.findNearbyPlayers());
+        this.ui.showManualBtn.addEventListener('click', () => this.showManualOptions());
+        this.ui.backToProximityBtn.addEventListener('click', () => this.showProximityPanel());
 
         // Online options
         this.ui.createRoomBtn.addEventListener('click', () => this.showCreateRoomPanel());
@@ -174,15 +216,56 @@ class TicTacToe {
         this.ui.createRoomPanel.classList.add('hidden');
         this.ui.joinRoomPanel.classList.add('hidden');
         this.ui.roomCodeDisplay.classList.add('hidden');
+        this.ui.manualOptions.classList.add('hidden');
+        this.ui.proximityPanel.classList.remove('hidden');
+        this.ui.proximityStatus.classList.add('hidden');
+        this.ui.findNearbyBtn.disabled = false;
+    }
+
+    showProximityPanel() {
+        this.ui.proximityPanel.classList.remove('hidden');
+        this.ui.manualOptions.classList.add('hidden');
+        this.ui.createRoomPanel.classList.add('hidden');
+        this.ui.joinRoomPanel.classList.add('hidden');
+    }
+
+    showManualOptions() {
+        this.ui.proximityPanel.classList.add('hidden');
+        this.ui.manualOptions.classList.remove('hidden');
+    }
+
+    async findNearbyPlayers() {
+        const playerName = this.ui.proximityName.value.trim() || 'Player';
+        this.players[0].name = playerName;
+
+        try {
+            const result = await this.multiplayer.initProximity({ name: playerName });
+
+            if (result.isHost) {
+                // We're hosting, set up as player 1
+                this.localPlayerId = 0;
+            } else {
+                // We joined, set up as player 2
+                this.localPlayerId = 1;
+                this.players[1].name = playerName;
+            }
+        } catch (err) {
+            // Error handled by callbacks
+            console.error('Proximity error:', err);
+        }
     }
 
     showCreateRoomPanel() {
+        this.ui.proximityPanel.classList.add('hidden');
+        this.ui.manualOptions.classList.add('hidden');
         this.ui.createRoomPanel.classList.remove('hidden');
         this.ui.joinRoomPanel.classList.add('hidden');
         this.ui.roomCodeDisplay.classList.add('hidden');
     }
 
     showJoinRoomPanel() {
+        this.ui.proximityPanel.classList.add('hidden');
+        this.ui.manualOptions.classList.add('hidden');
         this.ui.joinRoomPanel.classList.remove('hidden');
         this.ui.createRoomPanel.classList.add('hidden');
         this.ui.joinStatus.classList.add('hidden');
