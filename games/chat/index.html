@@ -158,6 +158,20 @@
                 <button class="btn btn-secondary btn-large" onclick="cancelConnection()">Cancel</button>
             </div>
         </div>
+
+        <!-- Reconnecting Screen -->
+        <div class="screen" id="screen-reconnecting">
+            <div class="spacer"></div>
+            <div class="text-center">
+                <div class="spinner" style="margin: 0 auto 1rem;"></div>
+                <p id="reconnecting-text">Reconnecting...</p>
+                <p class="text-muted mt-1" id="reconnect-attempt">Attempt 1 of 3</p>
+            </div>
+            <div class="spacer"></div>
+            <div class="action-bar">
+                <button class="btn btn-secondary btn-large" onclick="cancelReconnection()">Cancel</button>
+            </div>
+        </div>
     </div>
 
     <script src="../assets/js/multiplayer.js"></script>
@@ -512,6 +526,122 @@
                 e.returnValue = '';
             }
         });
+
+        // Reconnection support
+        function attemptReconnect() {
+            var session = MultiplayerSession.load();
+            if (!session) return false;
+
+            playerName = session.playerName;
+            document.getElementById('player-name').value = playerName;
+
+            showScreen('reconnecting');
+            document.getElementById('reconnecting-text').textContent = session.isHost
+                ? 'Reclaiming room...'
+                : 'Rejoining room...';
+
+            room = new MultiplayerRoom({
+                playerName: playerName,
+                persistSession: true
+            });
+
+            room.onReconnecting = function(attempt, maxAttempts) {
+                document.getElementById('reconnect-attempt').textContent =
+                    'Attempt ' + attempt + ' of ' + maxAttempts;
+            };
+
+            room.onReconnected = function() {
+                // Session restored successfully
+            };
+
+            room.onRoomCreated = function(code) {
+                document.getElementById('room-code-display').textContent = code;
+                updatePlayerList();
+
+                // If we were in chat, go directly to chat
+                if (room.gameState && room.gameState.inChat) {
+                    inChat = true;
+                    showChatScreen();
+                    addSystemMessage('Reconnected to chat');
+                } else {
+                    showScreen('lobby');
+                    document.getElementById('start-action').style.display = 'block';
+                }
+            };
+
+            room.onJoinedRoom = function(roomCode, players) {
+                document.getElementById('room-code-display').textContent = roomCode;
+                updatePlayerList();
+
+                // Check if chat already started
+                if (room.gameState && room.gameState.inChat) {
+                    inChat = true;
+                    showChatScreen();
+                    addSystemMessage('Reconnected to chat');
+                } else {
+                    showScreen('lobby');
+                }
+            };
+
+            room.onPlayerJoined = function(player, allPlayers) {
+                updatePlayerList();
+                if (inChat) {
+                    addSystemMessage(player.name + ' joined the chat');
+                }
+            };
+
+            room.onPlayerLeft = function(player, allPlayers) {
+                updatePlayerList();
+                if (inChat) {
+                    addSystemMessage(player.name + ' left the chat');
+                }
+            };
+
+            room.onMessage = function(type, data, fromPlayer) {
+                if (type === 'chat' && inChat) {
+                    if (fromPlayer.id !== room.playerId) {
+                        addChatMessage(data.text, fromPlayer, false);
+                    }
+                } else if (type === 'start_chat') {
+                    inChat = true;
+                    showChatScreen();
+                }
+            };
+
+            room.onError = function(err) {
+                if (err.isReconnectError) {
+                    // Reconnection failed, go to menu
+                    showMenu();
+                } else {
+                    alert('Error: ' + err.message);
+                    showMenu();
+                }
+            };
+
+            room.onDisconnected = function(reason) {
+                inChat = false;
+                alert('Disconnected: ' + reason);
+                showMenu();
+            };
+
+            return room.reconnect();
+        }
+
+        function cancelReconnection() {
+            if (room) {
+                room.disconnect();
+                room = null;
+            }
+            MultiplayerSession.clear();
+            showMenu();
+        }
+
+        // Check for saved session on page load
+        (function() {
+            if (MultiplayerSession.exists()) {
+                attemptReconnect();
+            }
+        })();
     </script>
 </body>
 </html>

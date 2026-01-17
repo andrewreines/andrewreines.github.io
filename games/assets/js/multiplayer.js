@@ -6,6 +6,9 @@
 (function(global) {
     'use strict';
 
+    // Storage key for session persistence
+    var STORAGE_KEY = 'multiplayer_session';
+
     // Generate a random 6-character alphanumeric code
     function generateRoomCode() {
         var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed confusing chars: I,O,0,1
@@ -22,12 +25,64 @@
     }
 
     /**
+     * Session management - persist room data for reconnection
+     */
+    var Session = {
+        save: function(data) {
+            try {
+                var session = {
+                    roomCode: data.roomCode,
+                    playerId: data.playerId,
+                    playerName: data.playerName,
+                    isHost: data.isHost,
+                    gameState: data.gameState || {},
+                    timestamp: Date.now()
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+            } catch (e) {
+                console.warn('[Multiplayer] Failed to save session:', e);
+            }
+        },
+
+        load: function() {
+            try {
+                var data = localStorage.getItem(STORAGE_KEY);
+                if (!data) return null;
+
+                var session = JSON.parse(data);
+                // Session expires after 30 minutes
+                var maxAge = 30 * 60 * 1000;
+                if (Date.now() - session.timestamp > maxAge) {
+                    Session.clear();
+                    return null;
+                }
+                return session;
+            } catch (e) {
+                console.warn('[Multiplayer] Failed to load session:', e);
+                return null;
+            }
+        },
+
+        clear: function() {
+            try {
+                localStorage.removeItem(STORAGE_KEY);
+            } catch (e) {}
+        },
+
+        exists: function() {
+            return Session.load() !== null;
+        }
+    };
+
+    /**
      * MultiplayerRoom - Core multiplayer room management
      * @param {Object} options - Configuration options
      * @param {number} options.maxPlayers - Maximum players allowed (default: 10)
      * @param {string} options.playerName - This player's display name
      * @param {Object} options.playerData - Additional player data
      * @param {number} options.connectionTimeout - Timeout in ms (default: 10000)
+     * @param {boolean} options.persistSession - Save session for reconnection (default: true)
+     * @param {number} options.reconnectDelay - Delay before host reclaim attempt (default: 2000)
      */
     function MultiplayerRoom(options) {
         options = options || {};
@@ -36,11 +91,14 @@
         this.playerName = options.playerName || 'Player';
         this.playerData = options.playerData || {};
         this.connectionTimeout = options.connectionTimeout || 10000;
+        this.persistSession = options.persistSession !== false;
+        this.reconnectDelay = options.reconnectDelay || 2000;
 
         this.roomCode = null;
         this.isHost = false;
         this.peer = null;
         this.playerId = generatePlayerId();
+        this.isReconnecting = false;
 
         // Host: map of peerId -> connection
         this.connections = {};
@@ -58,6 +116,8 @@
         this._connectionTimer = null;
         this._createAttempts = 0;
         this._maxCreateAttempts = 3;
+        this._reconnectAttempts = 0;
+        this._maxReconnectAttempts = 3;
 
         // Event callbacks (override these)
         this.onRoomCreated = function(roomCode) {};
@@ -68,7 +128,288 @@
         this.onMessage = function(type, data, fromPlayer) {};
         this.onError = function(error) {};
         this.onDisconnected = function(reason) {};
+        this.onReconnecting = function(attempt, maxAttempts) {};
+        this.onReconnected = function() {};
     }
+
+    /**
+     * Check if there's a saved session to reconnect to
+     */
+    MultiplayerRoom.prototype.hasSession = function() {
+        return Session.exists();
+    };
+
+    /**
+     * Get saved session data
+     */
+    MultiplayerRoom.prototype.getSession = function() {
+        return Session.load();
+    };
+
+    /**
+     * Clear saved session
+     */
+    MultiplayerRoom.prototype.clearSession = function() {
+        Session.clear();
+    };
+
+    /**
+     * Save current session
+     */
+    MultiplayerRoom.prototype._saveSession = function() {
+        if (!this.persistSession) return;
+        Session.save({
+            roomCode: this.roomCode,
+            playerId: this.playerId,
+            playerName: this.playerName,
+            isHost: this.isHost,
+            gameState: this.gameState
+        });
+    };
+
+    /**
+     * Attempt to reconnect using saved session
+     * @returns {boolean} true if reconnection was attempted, false if no session
+     */
+    MultiplayerRoom.prototype.reconnect = function() {
+        var session = Session.load();
+        if (!session) {
+            return false;
+        }
+
+        // Restore session data
+        this.playerId = session.playerId;
+        this.playerName = session.playerName;
+        this.gameState = session.gameState || {};
+        this.isReconnecting = true;
+        this._reconnectAttempts = 0;
+
+        if (session.isHost) {
+            this._reconnectAsHost(session.roomCode);
+        } else {
+            this._reconnectAsGuest(session.roomCode);
+        }
+
+        return true;
+    };
+
+    /**
+     * Reconnect as host - reclaim the room
+     */
+    MultiplayerRoom.prototype._reconnectAsHost = function(roomCode) {
+        var self = this;
+        this._reconnectAttempts++;
+        this.onReconnecting(this._reconnectAttempts, this._maxReconnectAttempts);
+
+        console.log('[Multiplayer] Attempting to reclaim room:', roomCode, 'attempt:', this._reconnectAttempts);
+
+        this.isConnecting = true;
+        this.isHost = true;
+        this.roomCode = roomCode;
+
+        var peerId = 'gr_' + roomCode;
+
+        try {
+            this.peer = new Peer(peerId, {
+                debug: 1,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+        } catch (e) {
+            this._handleReconnectError('peer_create_failed', e.message);
+            return;
+        }
+
+        this._connectionTimer = setTimeout(function() {
+            if (self.isConnecting) {
+                self._clearConnection();
+                self._handleReconnectError('timeout', 'Connection timed out');
+            }
+        }, this.connectionTimeout);
+
+        this.peer.on('open', function(id) {
+            console.log('[Multiplayer] Reclaimed room:', roomCode);
+            self._clearTimer();
+            self.isConnecting = false;
+            self.isConnected = true;
+            self.isReconnecting = false;
+            self._reconnectAttempts = 0;
+
+            // Add self to players
+            self.players[self.playerId] = {
+                id: self.playerId,
+                name: self.playerName,
+                isHost: true,
+                data: self.playerData
+            };
+
+            self._saveSession();
+            self.onReconnected();
+            self.onRoomCreated(self.roomCode);
+        });
+
+        this.peer.on('connection', function(conn) {
+            self._handleIncomingConnection(conn);
+        });
+
+        this.peer.on('error', function(err) {
+            console.error('[Multiplayer] Reconnect error:', err);
+            if (err.type === 'unavailable-id') {
+                // Room ID still taken - wait and retry
+                self._clearConnection();
+                if (self._reconnectAttempts < self._maxReconnectAttempts) {
+                    console.log('[Multiplayer] Room still occupied, retrying in', self.reconnectDelay, 'ms');
+                    setTimeout(function() {
+                        self._reconnectAsHost(roomCode);
+                    }, self.reconnectDelay);
+                } else {
+                    self._handleReconnectError('reclaim_failed', 'Could not reclaim room. It may still be active.');
+                }
+            } else {
+                self._handleReconnectError(err.type, err.message);
+            }
+        });
+
+        this.peer.on('disconnected', function() {
+            if (self.isConnected) {
+                self.isConnected = false;
+                self.onDisconnected('peer_disconnected');
+            }
+        });
+    };
+
+    /**
+     * Reconnect as guest - rejoin the room
+     */
+    MultiplayerRoom.prototype._reconnectAsGuest = function(roomCode) {
+        var self = this;
+        this._reconnectAttempts++;
+        this.onReconnecting(this._reconnectAttempts, this._maxReconnectAttempts);
+
+        console.log('[Multiplayer] Attempting to rejoin room:', roomCode, 'attempt:', this._reconnectAttempts);
+
+        // Use joinRoom but with the restored playerId
+        this.isConnecting = true;
+        this.isHost = false;
+        this.roomCode = roomCode;
+
+        try {
+            this.peer = new Peer({
+                debug: 1,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+        } catch (e) {
+            this._handleReconnectError('peer_create_failed', e.message);
+            return;
+        }
+
+        this._connectionTimer = setTimeout(function() {
+            if (self.isConnecting) {
+                self._clearConnection();
+                if (self._reconnectAttempts < self._maxReconnectAttempts) {
+                    setTimeout(function() {
+                        self._reconnectAsGuest(roomCode);
+                    }, self.reconnectDelay);
+                } else {
+                    self._handleReconnectError('timeout', 'Could not reconnect to room');
+                }
+            }
+        }, this.connectionTimeout);
+
+        this.peer.on('open', function(id) {
+            var hostPeerId = 'gr_' + self.roomCode;
+            self.hostConnection = self.peer.connect(hostPeerId, {
+                reliable: true,
+                metadata: {
+                    playerId: self.playerId,
+                    playerName: self.playerName,
+                    playerData: self.playerData,
+                    isReconnecting: true
+                }
+            });
+
+            self.hostConnection.on('open', function() {
+                // Wait for welcome message
+            });
+
+            self.hostConnection.on('data', function(data) {
+                if (data.type === 'welcome') {
+                    self._clearTimer();
+                    self.isConnecting = false;
+                    self.isConnected = true;
+                    self.isReconnecting = false;
+                    self._reconnectAttempts = 0;
+                    self.players = data.players;
+                    self.gameState = data.gameState;
+                    self._saveSession();
+                    self.onReconnected();
+                    self.onJoinedRoom(data.roomCode, data.players);
+                } else {
+                    self._handleMessageFromHost(data);
+                }
+            });
+
+            self.hostConnection.on('close', function() {
+                self._clearTimer();
+                if (self.isConnected) {
+                    self.isConnected = false;
+                    self.onDisconnected('host_disconnected');
+                } else if (self.isReconnecting && self._reconnectAttempts < self._maxReconnectAttempts) {
+                    // Host might be reconnecting too, retry
+                    setTimeout(function() {
+                        self._reconnectAsGuest(roomCode);
+                    }, self.reconnectDelay);
+                }
+            });
+
+            self.hostConnection.on('error', function(err) {
+                self._clearTimer();
+                if (self._reconnectAttempts < self._maxReconnectAttempts) {
+                    setTimeout(function() {
+                        self._reconnectAsGuest(roomCode);
+                    }, self.reconnectDelay);
+                } else {
+                    self._handleReconnectError('connection_error', err.message || 'Connection failed');
+                }
+            });
+        });
+
+        this.peer.on('error', function(err) {
+            console.error('[Multiplayer] Reconnect error:', err);
+            if (err.type === 'peer-unavailable') {
+                // Room doesn't exist yet (host might be reconnecting)
+                self._clearConnection();
+                if (self._reconnectAttempts < self._maxReconnectAttempts) {
+                    setTimeout(function() {
+                        self._reconnectAsGuest(roomCode);
+                    }, self.reconnectDelay);
+                } else {
+                    self._handleReconnectError('room_not_found', 'Room no longer exists');
+                }
+            } else {
+                self._handleReconnectError(err.type, err.message);
+            }
+        });
+    };
+
+    /**
+     * Handle reconnection error
+     */
+    MultiplayerRoom.prototype._handleReconnectError = function(type, message) {
+        this.isConnecting = false;
+        this.isReconnecting = false;
+        Session.clear();
+        this.onError({ type: type, message: message, isReconnectError: true });
+    };
 
     /**
      * Create a new room as host
@@ -128,6 +469,7 @@
                 data: self.playerData
             };
 
+            self._saveSession();
             self.onRoomCreated(self.roomCode);
         });
 
@@ -366,6 +708,7 @@
                 this.isConnected = true;
                 this.players = data.players;
                 this.gameState = data.gameState;
+                this._saveSession();
                 this.onJoinedRoom(data.roomCode, data.players);
                 break;
 
@@ -490,6 +833,7 @@
      */
     MultiplayerRoom.prototype.sendState = function(state) {
         this.gameState = state;
+        this._saveSession(); // Persist updated state
 
         if (this.isHost) {
             // Broadcast to all guests
@@ -557,9 +901,13 @@
 
     /**
      * Disconnect and clean up
+     * @param {Object} options - Disconnect options
+     * @param {boolean} options.clearSession - Clear saved session (default: true)
      */
-    MultiplayerRoom.prototype.disconnect = function() {
+    MultiplayerRoom.prototype.disconnect = function(options) {
         var self = this;
+        options = options || {};
+        var shouldClearSession = options.clearSession !== false;
 
         this._clearTimer();
 
@@ -592,10 +940,15 @@
         this.hostConnection = null;
         this.peer = null;
         this._createAttempts = 0;
+
+        if (shouldClearSession) {
+            Session.clear();
+        }
     };
 
     // Export
     global.MultiplayerRoom = MultiplayerRoom;
+    global.MultiplayerSession = Session;
     global.generateRoomCode = generateRoomCode;
 
 })(typeof window !== 'undefined' ? window : this);

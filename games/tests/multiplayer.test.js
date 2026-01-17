@@ -647,3 +647,336 @@ describe('Timeout Handling', function() {
 function beforeEach(fn) {
     fn();
 }
+
+// Mock localStorage for session tests
+var mockStorage = {};
+global.localStorage = {
+    getItem: function(key) { return mockStorage[key] || null; },
+    setItem: function(key, value) { mockStorage[key] = value; },
+    removeItem: function(key) { delete mockStorage[key]; },
+    clear: function() { mockStorage = {}; }
+};
+
+describe('Session Management', function() {
+    beforeEach(function() {
+        localStorage.clear();
+    });
+
+    it('MultiplayerSession.save stores session data', function() {
+        MultiplayerSession.save({
+            roomCode: 'ABCDEF',
+            playerId: 'p_123',
+            playerName: 'TestPlayer',
+            isHost: true,
+            gameState: { score: 100 }
+        });
+
+        var stored = JSON.parse(localStorage.getItem('multiplayer_session'));
+        assertEqual(stored.roomCode, 'ABCDEF');
+        assertEqual(stored.playerId, 'p_123');
+        assertEqual(stored.playerName, 'TestPlayer');
+        assertEqual(stored.isHost, true);
+        assertDeepEqual(stored.gameState, { score: 100 });
+        assert(stored.timestamp > 0, 'Should have timestamp');
+    });
+
+    it('MultiplayerSession.load returns session data', function() {
+        var session = {
+            roomCode: 'XYZABC',
+            playerId: 'p_456',
+            playerName: 'Player2',
+            isHost: false,
+            gameState: {},
+            timestamp: Date.now()
+        };
+        localStorage.setItem('multiplayer_session', JSON.stringify(session));
+
+        var loaded = MultiplayerSession.load();
+        assertEqual(loaded.roomCode, 'XYZABC');
+        assertEqual(loaded.playerId, 'p_456');
+        assertEqual(loaded.playerName, 'Player2');
+        assertEqual(loaded.isHost, false);
+    });
+
+    it('MultiplayerSession.load returns null for expired session', function() {
+        var session = {
+            roomCode: 'ABCDEF',
+            playerId: 'p_123',
+            playerName: 'Old',
+            isHost: true,
+            gameState: {},
+            timestamp: Date.now() - (31 * 60 * 1000) // 31 minutes ago
+        };
+        localStorage.setItem('multiplayer_session', JSON.stringify(session));
+
+        var loaded = MultiplayerSession.load();
+        assertEqual(loaded, null);
+    });
+
+    it('MultiplayerSession.load returns null if no session', function() {
+        var loaded = MultiplayerSession.load();
+        assertEqual(loaded, null);
+    });
+
+    it('MultiplayerSession.clear removes session', function() {
+        localStorage.setItem('multiplayer_session', '{}');
+        MultiplayerSession.clear();
+        assertEqual(localStorage.getItem('multiplayer_session'), null);
+    });
+
+    it('MultiplayerSession.exists returns true when session exists', function() {
+        var session = {
+            roomCode: 'ABCDEF',
+            timestamp: Date.now()
+        };
+        localStorage.setItem('multiplayer_session', JSON.stringify(session));
+        assertEqual(MultiplayerSession.exists(), true);
+    });
+
+    it('MultiplayerSession.exists returns false when no session', function() {
+        localStorage.clear(); // Ensure clean state
+        assertEqual(MultiplayerSession.exists(), false);
+    });
+});
+
+describe('MultiplayerRoom Session Integration', function() {
+    beforeEach(function() {
+        localStorage.clear();
+        MockPeer.reset();
+    });
+
+    it('hasSession returns false when no session', function() {
+        var room = new MultiplayerRoom({});
+        assertEqual(room.hasSession(), false);
+    });
+
+    it('hasSession returns true when session exists', function() {
+        MultiplayerSession.save({
+            roomCode: 'ABCDEF',
+            playerId: 'p_123',
+            playerName: 'Test',
+            isHost: true,
+            gameState: {}
+        });
+        var room = new MultiplayerRoom({});
+        assertEqual(room.hasSession(), true);
+    });
+
+    it('getSession returns session data', function() {
+        MultiplayerSession.save({
+            roomCode: 'XYZABC',
+            playerId: 'p_456',
+            playerName: 'SessionPlayer',
+            isHost: false,
+            gameState: { level: 5 }
+        });
+        var room = new MultiplayerRoom({});
+        var session = room.getSession();
+        assertEqual(session.roomCode, 'XYZABC');
+        assertEqual(session.playerName, 'SessionPlayer');
+    });
+
+    it('clearSession removes session', function() {
+        MultiplayerSession.save({ roomCode: 'ABC', timestamp: Date.now() });
+        var room = new MultiplayerRoom({});
+        room.clearSession();
+        assertEqual(room.hasSession(), false);
+    });
+
+    it('_saveSession persists current room state', function() {
+        var room = new MultiplayerRoom({ playerName: 'SaveTest', persistSession: true });
+        room.roomCode = 'SAVEME';
+        room.isHost = true;
+        room.gameState = { saved: true };
+
+        room._saveSession();
+
+        var session = MultiplayerSession.load();
+        assertEqual(session.roomCode, 'SAVEME');
+        assertEqual(session.playerName, 'SaveTest');
+        assertEqual(session.isHost, true);
+        assertDeepEqual(session.gameState, { saved: true });
+    });
+
+    it('_saveSession does nothing when persistSession is false', function() {
+        localStorage.clear(); // Ensure clean state
+        var room = new MultiplayerRoom({ playerName: 'NoSave', persistSession: false });
+        room.roomCode = 'NOSAVE';
+        room._saveSession();
+        assertEqual(MultiplayerSession.load(), null);
+    });
+
+    it('disconnect clears session by default', function() {
+        MultiplayerSession.save({ roomCode: 'ABC', timestamp: Date.now() });
+        var room = new MultiplayerRoom({});
+        room.peer = new MockPeer();
+        room.disconnect();
+        assertEqual(MultiplayerSession.exists(), false);
+    });
+
+    it('disconnect preserves session when clearSession is false', function() {
+        MultiplayerSession.save({
+            roomCode: 'KEEP',
+            playerId: 'p_keep',
+            playerName: 'Keeper',
+            isHost: true,
+            gameState: {},
+            timestamp: Date.now()
+        });
+        var room = new MultiplayerRoom({});
+        room.peer = new MockPeer();
+        room.disconnect({ clearSession: false });
+        assertEqual(MultiplayerSession.exists(), true);
+    });
+
+    it('sendState updates session', function() {
+        var room = new MultiplayerRoom({ playerName: 'StateTest', persistSession: true });
+        room.roomCode = 'STTEST';
+        room.isHost = true;
+        room.isConnected = true;
+        room.players[room.playerId] = { id: room.playerId, name: 'StateTest' };
+        room.connections = {};
+
+        room.sendState({ updated: true, turn: 5 });
+
+        var session = MultiplayerSession.load();
+        assertDeepEqual(session.gameState, { updated: true, turn: 5 });
+    });
+});
+
+describe('Reconnection', function() {
+    beforeEach(function() {
+        localStorage.clear();
+        MockPeer.reset();
+    });
+
+    it('reconnect returns false when no session', function() {
+        var room = new MultiplayerRoom({});
+        assertEqual(room.reconnect(), false);
+    });
+
+    it('reconnect returns true when session exists', function() {
+        MockPeer.simulateOpen = false;
+        MultiplayerSession.save({
+            roomCode: 'RECON1',
+            playerId: 'p_recon',
+            playerName: 'Reconnector',
+            isHost: true,
+            gameState: { inChat: true },
+            timestamp: Date.now()
+        });
+
+        var room = new MultiplayerRoom({});
+        var result = room.reconnect();
+        assertEqual(result, true);
+        room.disconnect();
+    });
+
+    it('reconnect restores player data from session', function() {
+        MockPeer.simulateOpen = false;
+        MultiplayerSession.save({
+            roomCode: 'RECON2',
+            playerId: 'p_original',
+            playerName: 'OriginalPlayer',
+            isHost: false,
+            gameState: { score: 500 },
+            timestamp: Date.now()
+        });
+
+        var room = new MultiplayerRoom({});
+        room.reconnect();
+
+        assertEqual(room.playerId, 'p_original');
+        assertEqual(room.playerName, 'OriginalPlayer');
+        assertDeepEqual(room.gameState, { score: 500 });
+        room.disconnect();
+    });
+
+    it('reconnect sets isReconnecting to true', function() {
+        MockPeer.simulateOpen = false;
+        MultiplayerSession.save({
+            roomCode: 'RECON3',
+            playerId: 'p_test',
+            playerName: 'Test',
+            isHost: true,
+            gameState: {},
+            timestamp: Date.now()
+        });
+
+        var room = new MultiplayerRoom({});
+        room.reconnect();
+
+        assertEqual(room.isReconnecting, true);
+        room.disconnect();
+    });
+
+    it('reconnect calls onReconnecting callback', function() {
+        MockPeer.simulateOpen = false;
+        MultiplayerSession.save({
+            roomCode: 'RECON4',
+            playerId: 'p_test',
+            playerName: 'Test',
+            isHost: true,
+            gameState: {},
+            timestamp: Date.now()
+        });
+
+        var room = new MultiplayerRoom({});
+        var reconnectingCalled = false;
+        room.onReconnecting = function(attempt, max) {
+            reconnectingCalled = true;
+            assertEqual(attempt, 1);
+            assertEqual(max, 3);
+        };
+
+        room.reconnect();
+        assert(reconnectingCalled, 'onReconnecting should be called');
+        room.disconnect();
+    });
+
+    it('_handleReconnectError clears session and calls onError', function() {
+        MultiplayerSession.save({
+            roomCode: 'ERROR',
+            playerId: 'p_err',
+            playerName: 'Error',
+            isHost: true,
+            gameState: {},
+            timestamp: Date.now()
+        });
+
+        var room = new MultiplayerRoom({});
+        var errorCalled = false;
+        room.onError = function(err) {
+            errorCalled = true;
+            assertEqual(err.type, 'test_error');
+            assertEqual(err.message, 'Test message');
+            assertEqual(err.isReconnectError, true);
+        };
+
+        room._handleReconnectError('test_error', 'Test message');
+
+        assert(errorCalled, 'onError should be called');
+        assertEqual(room.isReconnecting, false);
+        assertEqual(MultiplayerSession.exists(), false);
+    });
+
+    it('constructor accepts reconnectDelay option', function() {
+        var room = new MultiplayerRoom({ reconnectDelay: 5000 });
+        assertEqual(room.reconnectDelay, 5000);
+    });
+
+    it('constructor defaults reconnectDelay to 2000', function() {
+        var room = new MultiplayerRoom({});
+        assertEqual(room.reconnectDelay, 2000);
+    });
+
+    it('has onReconnecting callback', function() {
+        var room = new MultiplayerRoom({});
+        assertEqual(typeof room.onReconnecting, 'function');
+    });
+
+    it('has onReconnected callback', function() {
+        var room = new MultiplayerRoom({});
+        assertEqual(typeof room.onReconnected, 'function');
+    });
+});
