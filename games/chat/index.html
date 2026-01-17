@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>Chat Room</title>
+    <link rel="stylesheet" href="../assets/css/games.css">
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Menu Screen -->
+        <div class="screen active" id="screen-menu">
+            <a href="../" class="back-btn">← Back</a>
+
+            <div class="header">
+                <h1>Chat Room</h1>
+                <p class="subtitle">Private chat with friends</p>
+            </div>
+
+            <div class="form-group">
+                <label for="player-name">Your Name</label>
+                <input type="text" id="player-name" class="input" placeholder="Enter your name" maxlength="20" autocomplete="off">
+            </div>
+
+            <div class="game-list">
+                <button class="btn btn-primary btn-large" onclick="showCreateRoom()">
+                    Create Room
+                </button>
+                <button class="btn btn-secondary btn-large" onclick="showJoinRoom()">
+                    Join Room
+                </button>
+            </div>
+        </div>
+
+        <!-- Create Room Screen -->
+        <div class="screen" id="screen-create">
+            <button class="back-btn" onclick="showMenu()">← Back</button>
+
+            <div class="header">
+                <h1>Create Room</h1>
+                <p class="subtitle">Set up your chat room</p>
+            </div>
+
+            <div class="form-group">
+                <label>Maximum Players</label>
+                <div class="number-input">
+                    <button class="number-btn" onclick="adjustMaxPlayers(-1)">−</button>
+                    <input type="number" id="max-players" class="input" value="10" min="2" max="20" readonly>
+                    <button class="number-btn" onclick="adjustMaxPlayers(1)">+</button>
+                </div>
+            </div>
+
+            <div class="spacer"></div>
+
+            <div class="action-bar">
+                <button class="btn btn-success btn-large" onclick="createRoom()">
+                    Create Room
+                </button>
+            </div>
+        </div>
+
+        <!-- Join Room Screen -->
+        <div class="screen" id="screen-join">
+            <button class="back-btn" onclick="showMenu()">← Back</button>
+
+            <div class="header">
+                <h1>Join Room</h1>
+                <p class="subtitle">Enter the room code</p>
+            </div>
+
+            <div class="form-group">
+                <label for="room-code-input">Room Code</label>
+                <input type="text" id="room-code-input" class="input input-code" placeholder="ABCDEF" maxlength="6" autocomplete="off" autocapitalize="characters">
+            </div>
+
+            <div id="join-error" class="error-message hidden"></div>
+
+            <div class="spacer"></div>
+
+            <div class="action-bar">
+                <button class="btn btn-primary btn-large" onclick="joinRoom()" id="join-btn">
+                    Join Room
+                </button>
+            </div>
+        </div>
+
+        <!-- Lobby Screen (waiting for players) -->
+        <div class="screen" id="screen-lobby">
+            <button class="back-btn" onclick="leaveRoom()">← Leave</button>
+
+            <div class="header">
+                <h1>Room Lobby</h1>
+                <div class="status">
+                    <span class="status-dot connected"></span>
+                    <span>Connected</span>
+                </div>
+            </div>
+
+            <div class="room-code-display">
+                <label>Room Code</label>
+                <div class="room-code" id="room-code-display">------</div>
+                <p class="hint">Share this code with friends</p>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Players</h3>
+                    <span class="text-muted" id="player-count">0/10</span>
+                </div>
+                <ul class="player-list" id="player-list"></ul>
+            </div>
+
+            <div class="spacer"></div>
+
+            <div class="action-bar" id="start-action" style="display: none;">
+                <button class="btn btn-success btn-large" onclick="startChat()">
+                    Start Chatting
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat Screen -->
+        <div class="screen" id="screen-chat">
+            <div class="header" style="padding: 0.75rem 0; margin-bottom: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <button class="btn btn-small btn-danger" onclick="leaveRoom()" style="position: static;">Leave</button>
+                    <div>
+                        <span class="text-muted" style="font-size: 0.8rem;">Room: </span>
+                        <span id="chat-room-code" style="font-family: monospace; color: #3498db;">------</span>
+                    </div>
+                    <span class="text-muted" id="chat-player-count" style="font-size: 0.85rem;">0 online</span>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div class="messages-area" id="messages-area"></div>
+
+                <div class="chat-input-area">
+                    <input type="text" id="message-input" class="input" placeholder="Type a message..." maxlength="500" autocomplete="off">
+                    <button class="btn btn-primary" onclick="sendChatMessage()" id="send-btn">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connecting Screen -->
+        <div class="screen" id="screen-connecting">
+            <div class="spacer"></div>
+            <div class="text-center">
+                <div class="spinner" style="margin: 0 auto 1rem;"></div>
+                <p id="connecting-text">Connecting...</p>
+            </div>
+            <div class="spacer"></div>
+            <div class="action-bar">
+                <button class="btn btn-secondary btn-large" onclick="cancelConnection()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../assets/js/multiplayer.js"></script>
+    <script>
+        // State
+        var room = null;
+        var playerName = '';
+        var inChat = false;
+
+        // Screen management
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(function(s) {
+                s.classList.remove('active');
+            });
+            document.getElementById('screen-' + screenId).classList.add('active');
+        }
+
+        function showMenu() {
+            showScreen('menu');
+        }
+
+        function showCreateRoom() {
+            playerName = document.getElementById('player-name').value.trim();
+            if (!playerName) {
+                document.getElementById('player-name').focus();
+                return;
+            }
+            showScreen('create');
+        }
+
+        function showJoinRoom() {
+            playerName = document.getElementById('player-name').value.trim();
+            if (!playerName) {
+                document.getElementById('player-name').focus();
+                return;
+            }
+            document.getElementById('join-error').classList.add('hidden');
+            document.getElementById('room-code-input').value = '';
+            showScreen('join');
+        }
+
+        // Max players adjustment
+        function adjustMaxPlayers(delta) {
+            var input = document.getElementById('max-players');
+            var value = parseInt(input.value) + delta;
+            value = Math.max(2, Math.min(20, value));
+            input.value = value;
+        }
+
+        // Create room
+        function createRoom() {
+            var maxPlayers = parseInt(document.getElementById('max-players').value);
+
+            document.getElementById('connecting-text').textContent = 'Creating room...';
+            showScreen('connecting');
+
+            room = new MultiplayerRoom({
+                maxPlayers: maxPlayers,
+                playerName: playerName
+            });
+
+            room.onRoomCreated = function(code) {
+                document.getElementById('room-code-display').textContent = code;
+                updatePlayerList();
+                showScreen('lobby');
+                // Host can start chat immediately
+                document.getElementById('start-action').style.display = 'block';
+            };
+
+            room.onPlayerJoined = function(player, allPlayers) {
+                updatePlayerList();
+                if (inChat) {
+                    addSystemMessage(player.name + ' joined the chat');
+                }
+            };
+
+            room.onPlayerLeft = function(player, allPlayers) {
+                updatePlayerList();
+                if (inChat) {
+                    addSystemMessage(player.name + ' left the chat');
+                }
+            };
+
+            room.onMessage = function(type, data, fromPlayer) {
+                if (type === 'chat' && inChat) {
+                    addChatMessage(data.text, fromPlayer, false);
+                } else if (type === 'start_chat') {
+                    inChat = true;
+                    showChatScreen();
+                }
+            };
+
+            room.onError = function(err) {
+                alert('Error: ' + err.message);
+                showMenu();
+            };
+
+            room.onDisconnected = function(reason) {
+                inChat = false;
+                alert('Disconnected: ' + reason);
+                showMenu();
+            };
+
+            room.createRoom();
+        }
+
+        // Join room
+        function joinRoom() {
+            var code = document.getElementById('room-code-input').value.trim().toUpperCase();
+            if (code.length !== 6) {
+                showJoinError('Please enter a 6-character room code');
+                return;
+            }
+
+            document.getElementById('connecting-text').textContent = 'Joining room...';
+            showScreen('connecting');
+
+            room = new MultiplayerRoom({
+                playerName: playerName
+            });
+
+            room.onJoinedRoom = function(roomCode, players) {
+                document.getElementById('room-code-display').textContent = roomCode;
+                updatePlayerList();
+                showScreen('lobby');
+                // Guests wait for host to start
+            };
+
+            room.onPlayerJoined = function(player, allPlayers) {
+                updatePlayerList();
+                if (inChat) {
+                    addSystemMessage(player.name + ' joined the chat');
+                }
+            };
+
+            room.onPlayerLeft = function(player, allPlayers) {
+                updatePlayerList();
+                if (inChat) {
+                    addSystemMessage(player.name + ' left the chat');
+                }
+            };
+
+            room.onMessage = function(type, data, fromPlayer) {
+                if (type === 'chat' && inChat) {
+                    addChatMessage(data.text, fromPlayer, false);
+                } else if (type === 'start_chat') {
+                    inChat = true;
+                    showChatScreen();
+                }
+            };
+
+            room.onError = function(err) {
+                showJoinError(err.message);
+                showScreen('join');
+            };
+
+            room.onDisconnected = function(reason) {
+                inChat = false;
+                alert('Disconnected: ' + reason);
+                showMenu();
+            };
+
+            room.joinRoom(code);
+        }
+
+        function showJoinError(message) {
+            var el = document.getElementById('join-error');
+            el.textContent = message;
+            el.classList.remove('hidden');
+        }
+
+        function cancelConnection() {
+            if (room) {
+                room.disconnect();
+                room = null;
+            }
+            showMenu();
+        }
+
+        function leaveRoom() {
+            inChat = false;
+            if (room) {
+                room.disconnect();
+                room = null;
+            }
+            showMenu();
+        }
+
+        // Update player list UI
+        function updatePlayerList() {
+            var players = room.getPlayers();
+            var maxPlayers = room.maxPlayers;
+            var count = Object.keys(players).length;
+
+            document.getElementById('player-count').textContent = count + '/' + maxPlayers;
+
+            if (inChat) {
+                document.getElementById('chat-player-count').textContent = count + ' online';
+            }
+
+            var list = document.getElementById('player-list');
+            list.innerHTML = '';
+
+            Object.keys(players).forEach(function(id) {
+                var p = players[id];
+                var li = document.createElement('li');
+                li.className = 'player-item';
+
+                var initial = p.name.charAt(0).toUpperCase();
+                var isMe = id === room.playerId;
+
+                li.innerHTML =
+                    '<div class="player-avatar">' + initial + '</div>' +
+                    '<span class="player-name">' + escapeHtml(p.name) + (isMe ? ' (You)' : '') + '</span>' +
+                    (p.isHost ? '<span class="player-badge">Host</span>' : '');
+
+                list.appendChild(li);
+            });
+        }
+
+        // Start chat (host only)
+        function startChat() {
+            inChat = true;
+            room.sendMessage('start_chat', {});
+            showChatScreen();
+        }
+
+        function showChatScreen() {
+            document.getElementById('chat-room-code').textContent = room.roomCode;
+            document.getElementById('chat-player-count').textContent = room.getPlayerCount() + ' online';
+            document.getElementById('messages-area').innerHTML = '';
+            addSystemMessage('Chat started. Say hello!');
+            showScreen('chat');
+            document.getElementById('message-input').focus();
+        }
+
+        // Chat functions
+        function sendChatMessage() {
+            var input = document.getElementById('message-input');
+            var text = input.value.trim();
+            if (!text) return;
+
+            room.sendMessage('chat', { text: text });
+            addChatMessage(text, room.getMyPlayer(), true);
+            input.value = '';
+            input.focus();
+        }
+
+        function addChatMessage(text, fromPlayer, isSent) {
+            var area = document.getElementById('messages-area');
+            var div = document.createElement('div');
+            div.className = 'message ' + (isSent ? 'sent' : 'received');
+
+            if (!isSent) {
+                div.innerHTML = '<div class="message-sender">' + escapeHtml(fromPlayer.name) + '</div>';
+            }
+
+            var textDiv = document.createElement('div');
+            textDiv.className = 'message-text';
+            textDiv.textContent = text;
+            div.appendChild(textDiv);
+
+            area.appendChild(div);
+            area.scrollTop = area.scrollHeight;
+        }
+
+        function addSystemMessage(text) {
+            var area = document.getElementById('messages-area');
+            var div = document.createElement('div');
+            div.className = 'message system';
+            div.textContent = text;
+            area.appendChild(div);
+            area.scrollTop = area.scrollHeight;
+        }
+
+        // Utility
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Keyboard handling
+        document.getElementById('message-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+
+        document.getElementById('room-code-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                joinRoom();
+            }
+        });
+
+        document.getElementById('player-name').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.target.blur();
+            }
+        });
+
+        // Auto-uppercase room code input
+        document.getElementById('room-code-input').addEventListener('input', function(e) {
+            e.target.value = e.target.value.toUpperCase();
+        });
+
+        // Load saved name
+        (function() {
+            var savedName = localStorage.getItem('games_player_name');
+            if (savedName) {
+                document.getElementById('player-name').value = savedName;
+            }
+        })();
+
+        // Save name on change
+        document.getElementById('player-name').addEventListener('change', function(e) {
+            localStorage.setItem('games_player_name', e.target.value.trim());
+        });
+
+        // Prevent page unload while in room
+        window.addEventListener('beforeunload', function(e) {
+            if (room && room.isConnected) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    </script>
+</body>
+</html>
