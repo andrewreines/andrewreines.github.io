@@ -85,30 +85,18 @@
                     <!-- Host Game Panel -->
                     <div id="host-game-panel" class="online-panel hidden">
                         <h3><i class="fas fa-broadcast-tower"></i> Your Room</h3>
-                        <div id="host-status" class="host-status">
+                        <div id="host-status" class="status-message">
                             <i class="fas fa-spinner fa-spin"></i> Creating room...
                         </div>
                         <div id="host-info" class="host-info hidden">
-                            <p class="host-waiting"><i class="fas fa-hourglass-half"></i> Waiting for opponent to join...</p>
-
+                            <p class="host-waiting"><i class="fas fa-hourglass-half"></i> Waiting for opponent...</p>
                             <div class="room-code-display">
                                 <label>Room Code</label>
                                 <div class="room-code" id="host-room-code"></div>
                             </div>
-
-                            <div class="qr-code-container">
-                                <div id="qr-code"></div>
-                                <p class="qr-hint">Scan to join instantly</p>
-                            </div>
-
-                            <div class="share-options">
-                                <button id="copy-code-btn" class="btn btn-small">
-                                    <i class="fas fa-copy"></i> Copy Code
-                                </button>
-                                <button id="share-link-btn" class="btn btn-small">
-                                    <i class="fas fa-share-alt"></i> Share Link
-                                </button>
-                            </div>
+                            <button id="copy-code-btn" class="btn btn-secondary">
+                                <i class="fas fa-copy"></i> Copy Code
+                            </button>
                         </div>
                         <button id="cancel-host-btn" class="btn btn-link">
                             <i class="fas fa-arrow-left"></i> Cancel
@@ -119,13 +107,13 @@
                     <div id="join-game-panel" class="online-panel hidden">
                         <h3><i class="fas fa-sign-in-alt"></i> Join Room</h3>
                         <div class="form-group">
-                            <label>Room Code (6 characters)</label>
+                            <label>Room Code</label>
                             <input type="text" id="room-code-input" placeholder="ABC123" maxlength="6" autocomplete="off" autocapitalize="characters">
                         </div>
                         <button id="connect-room-btn" class="btn btn-primary">
-                            <i class="fas fa-plug"></i> Join Room
+                            <i class="fas fa-plug"></i> Join
                         </button>
-                        <div id="join-status" class="join-status hidden"></div>
+                        <div id="join-status" class="status-message hidden"></div>
                         <button id="back-from-join-btn" class="btn btn-link">
                             <i class="fas fa-arrow-left"></i> Back
                         </button>
@@ -172,7 +160,6 @@
                         <div class="cell" data-cell="7"></div>
                         <div class="cell" data-cell="8"></div>
                     </div>
-                    <div class="win-line" id="win-line"></div>
                 </div>
 
                 <div id="game-result" class="game-result hidden">
@@ -186,7 +173,6 @@
     </div>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script src="../assets/js/multiplayer.js"></script>
     <script src="assets/js/tictactoe.js"></script>
 </body>
