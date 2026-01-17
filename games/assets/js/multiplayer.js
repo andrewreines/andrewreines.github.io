@@ -27,6 +27,7 @@
      * @param {number} options.maxPlayers - Maximum players allowed (default: 10)
      * @param {string} options.playerName - This player's display name
      * @param {Object} options.playerData - Additional player data
+     * @param {number} options.connectionTimeout - Timeout in ms (default: 10000)
      */
     function MultiplayerRoom(options) {
         options = options || {};
@@ -34,6 +35,7 @@
         this.maxPlayers = options.maxPlayers || 10;
         this.playerName = options.playerName || 'Player';
         this.playerData = options.playerData || {};
+        this.connectionTimeout = options.connectionTimeout || 10000;
 
         this.roomCode = null;
         this.isHost = false;
@@ -51,6 +53,11 @@
         this.gameState = {};
         this.isConnected = false;
         this.isConnecting = false;
+
+        // Internal
+        this._connectionTimer = null;
+        this._createAttempts = 0;
+        this._maxCreateAttempts = 3;
 
         // Event callbacks (override these)
         this.onRoomCreated = function(roomCode) {};
@@ -76,6 +83,7 @@
 
         this.isConnecting = true;
         this.isHost = true;
+        this._createAttempts++;
         this.roomCode = generateRoomCode();
 
         // Create peer with room code as ID (prefixed to avoid collisions)
@@ -91,7 +99,16 @@
             }
         });
 
+        // Set connection timeout
+        this._connectionTimer = setTimeout(function() {
+            if (self.isConnecting) {
+                self._clearConnection();
+                self.onError({ type: 'timeout', message: 'Connection timed out. Please try again.' });
+            }
+        }, this.connectionTimeout);
+
         this.peer.on('open', function(id) {
+            self._clearTimer();
             self.isConnecting = false;
             self.isConnected = true;
 
@@ -123,6 +140,28 @@
     };
 
     /**
+     * Clear connection timeout timer
+     */
+    MultiplayerRoom.prototype._clearTimer = function() {
+        if (this._connectionTimer) {
+            clearTimeout(this._connectionTimer);
+            this._connectionTimer = null;
+        }
+    };
+
+    /**
+     * Clear connection state without triggering callbacks
+     */
+    MultiplayerRoom.prototype._clearConnection = function() {
+        this._clearTimer();
+        this.isConnecting = false;
+        if (this.peer) {
+            try { this.peer.destroy(); } catch (e) {}
+            this.peer = null;
+        }
+    };
+
+    /**
      * Join an existing room
      * @param {string} roomCode - 6-character room code
      */
@@ -149,6 +188,14 @@
             }
         });
 
+        // Set connection timeout
+        this._connectionTimer = setTimeout(function() {
+            if (self.isConnecting) {
+                self._clearConnection();
+                self.onError({ type: 'timeout', message: 'Connection timed out. Room may not exist.' });
+            }
+        }, this.connectionTimeout);
+
         this.peer.on('open', function(id) {
             // Connect to host
             var hostPeerId = 'gr_' + self.roomCode;
@@ -162,8 +209,7 @@
             });
 
             self.hostConnection.on('open', function() {
-                self.isConnecting = false;
-                self.isConnected = true;
+                // Don't clear timer yet - wait for welcome message
             });
 
             self.hostConnection.on('data', function(data) {
@@ -171,11 +217,15 @@
             });
 
             self.hostConnection.on('close', function() {
-                self.isConnected = false;
-                self.onDisconnected('host_disconnected');
+                self._clearTimer();
+                if (self.isConnected) {
+                    self.isConnected = false;
+                    self.onDisconnected('host_disconnected');
+                }
             });
 
             self.hostConnection.on('error', function(err) {
+                self._clearTimer();
                 self.onError({ type: 'connection_error', message: err.message || 'Connection failed' });
             });
         });
@@ -190,10 +240,10 @@
      */
     MultiplayerRoom.prototype._handleIncomingConnection = function(conn) {
         var self = this;
-        var playerCount = Object.keys(this.players).length;
 
         conn.on('open', function() {
-            // Check if room is full
+            // Check if room is full (get current count at time of connection)
+            var playerCount = Object.keys(self.players).length;
             if (playerCount >= self.maxPlayers) {
                 conn.send({ type: 'room_full' });
                 setTimeout(function() { conn.close(); }, 100);
@@ -295,12 +345,16 @@
 
         switch (data.type) {
             case 'welcome':
+                this._clearTimer();
+                this.isConnecting = false;
+                this.isConnected = true;
                 this.players = data.players;
                 this.gameState = data.gameState;
                 this.onJoinedRoom(data.roomCode, data.players);
                 break;
 
             case 'room_full':
+                this._clearTimer();
                 this.isConnecting = false;
                 this.onError({ type: 'room_full', message: 'Room is full' });
                 this.disconnect();
@@ -387,7 +441,7 @@
      * Handle PeerJS errors
      */
     MultiplayerRoom.prototype._handlePeerError = function(err) {
-        this.isConnecting = false;
+        this._clearTimer();
 
         var errorType = err.type || 'unknown';
         var message = err.message || 'Connection error';
@@ -395,12 +449,23 @@
         if (errorType === 'peer-unavailable') {
             message = 'Room not found';
             errorType = 'room_not_found';
+            this.isConnecting = false;
+            this.onError({ type: errorType, message: message });
         } else if (errorType === 'unavailable-id') {
-            message = 'Room code already in use, try again';
-            errorType = 'room_exists';
+            // Room code collision - auto-retry if we haven't exceeded attempts
+            if (this.isHost && this._createAttempts < this._maxCreateAttempts) {
+                this._clearConnection();
+                this.createRoom(); // Try again with new code
+                return;
+            }
+            message = 'Failed to create room. Please try again.';
+            errorType = 'room_create_failed';
+            this.isConnecting = false;
+            this.onError({ type: errorType, message: message });
+        } else {
+            this.isConnecting = false;
+            this.onError({ type: errorType, message: message });
         }
-
-        this.onError({ type: errorType, message: message });
     };
 
     /**
@@ -480,6 +545,8 @@
     MultiplayerRoom.prototype.disconnect = function() {
         var self = this;
 
+        this._clearTimer();
+
         if (this.isHost) {
             // Notify all guests
             this._broadcastToAll({ type: 'host_closing' });
@@ -508,6 +575,7 @@
         this.players = {};
         this.hostConnection = null;
         this.peer = null;
+        this._createAttempts = 0;
     };
 
     // Export

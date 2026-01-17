@@ -162,6 +162,15 @@
 
     <script src="../assets/js/multiplayer.js"></script>
     <script>
+        // Check PeerJS loaded
+        if (typeof Peer === 'undefined') {
+            document.body.innerHTML = '<div class="container" style="justify-content: center; text-align: center;">' +
+                '<h2>Connection Error</h2>' +
+                '<p class="text-muted mt-2">Failed to load networking library.<br>Please check your internet connection and refresh.</p>' +
+                '<button class="btn btn-primary mt-3" onclick="location.reload()">Retry</button>' +
+                '</div>';
+        }
+
         // State
         var room = null;
         var playerName = '';
@@ -179,21 +188,25 @@
             showScreen('menu');
         }
 
-        function showCreateRoom() {
-            playerName = document.getElementById('player-name').value.trim();
+        function validateName() {
+            var input = document.getElementById('player-name');
+            playerName = input.value.trim();
             if (!playerName) {
-                document.getElementById('player-name').focus();
-                return;
+                input.classList.add('error');
+                input.focus();
+                setTimeout(function() { input.classList.remove('error'); }, 300);
+                return false;
             }
+            return true;
+        }
+
+        function showCreateRoom() {
+            if (!validateName()) return;
             showScreen('create');
         }
 
         function showJoinRoom() {
-            playerName = document.getElementById('player-name').value.trim();
-            if (!playerName) {
-                document.getElementById('player-name').focus();
-                return;
-            }
+            if (!validateName()) return;
             document.getElementById('join-error').classList.add('hidden');
             document.getElementById('room-code-input').value = '';
             showScreen('join');
@@ -243,10 +256,12 @@
 
             room.onMessage = function(type, data, fromPlayer) {
                 if (type === 'chat' && inChat) {
-                    addChatMessage(data.text, fromPlayer, false);
+                    // Host: don't show own messages (already added in sendChatMessage)
+                    if (fromPlayer.id !== room.playerId) {
+                        addChatMessage(data.text, fromPlayer, false);
+                    }
                 } else if (type === 'start_chat') {
-                    inChat = true;
-                    showChatScreen();
+                    // This is for guests; host handles startChat() directly
                 }
             };
 
@@ -282,8 +297,16 @@
             room.onJoinedRoom = function(roomCode, players) {
                 document.getElementById('room-code-display').textContent = roomCode;
                 updatePlayerList();
-                showScreen('lobby');
-                // Guests wait for host to start
+
+                // Check if chat already started (late joiner)
+                if (room.gameState && room.gameState.inChat) {
+                    inChat = true;
+                    showChatScreen();
+                    addSystemMessage('You joined the chat');
+                } else {
+                    showScreen('lobby');
+                    // Guests wait for host to start
+                }
             };
 
             room.onPlayerJoined = function(player, allPlayers) {
@@ -302,7 +325,10 @@
 
             room.onMessage = function(type, data, fromPlayer) {
                 if (type === 'chat' && inChat) {
-                    addChatMessage(data.text, fromPlayer, false);
+                    // Guest: show all messages from others
+                    if (fromPlayer.id !== room.playerId) {
+                        addChatMessage(data.text, fromPlayer, false);
+                    }
                 } else if (type === 'start_chat') {
                     inChat = true;
                     showChatScreen();
@@ -381,6 +407,8 @@
         // Start chat (host only)
         function startChat() {
             inChat = true;
+            // Update game state so late joiners know chat has started
+            room.sendState({ inChat: true });
             room.sendMessage('start_chat', {});
             showChatScreen();
         }
