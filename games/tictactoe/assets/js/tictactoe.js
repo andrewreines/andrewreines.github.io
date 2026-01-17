@@ -1,461 +1,380 @@
-/**
- * Tic Tac Toe Game
- * Supports local and online multiplayer
- */
+// Tic Tac Toe - Simple Version
 
-class TicTacToe {
-    constructor() {
-        this.board = Array(9).fill(null);
-        this.currentPlayer = 0;
-        this.players = [
-            { name: 'Player 1', symbol: 'X', score: 0 },
-            { name: 'Player 2', symbol: 'O', score: 0 }
-        ];
-        this.gameOver = false;
-        this.winner = null;
-        this.winningLine = null;
+var board = [null,null,null,null,null,null,null,null,null];
+var currentPlayer = 0;
+var players = [
+    { name: 'Player 1', symbol: 'X', score: 0 },
+    { name: 'Player 2', symbol: 'O', score: 0 }
+];
+var gameOver = false;
+var mode = 'local';
+var multiplayer = null;
+var localPlayerId = 0;
 
-        this.multiplayer = new GameMultiplayer({ maxPlayers: 2 });
-        this.mode = 'local';
-        this.localPlayerId = 0;
+var winPatterns = [
+    [0,1,2], [3,4,5], [6,7,8],
+    [0,3,6], [1,4,7], [2,5,8],
+    [0,4,8], [2,4,6]
+];
 
-        this.winPatterns = [
-            [0, 1, 2], [3, 4, 5], [6, 7, 8],
-            [0, 3, 6], [1, 4, 7], [2, 5, 8],
-            [0, 4, 8], [2, 4, 6]
-        ];
+// Wait for DOM
+document.addEventListener('DOMContentLoaded', function() {
+    multiplayer = new GameMultiplayer({ maxPlayers: 2 });
+    setupMultiplayer();
+    bindEvents();
+});
 
-        this.initUI();
-        this.setupMultiplayerCallbacks();
-        this.bindEvents();
+function setupMultiplayer() {
+    multiplayer.onPlayerJoined = function(data) {
+        players[1].name = data.playerInfo.name;
+        document.querySelector('.host-waiting').innerHTML = '<i class="fas fa-check"></i> ' + data.playerInfo.name + ' joined!';
+        setTimeout(startOnlineGame, 1000);
+    };
+
+    multiplayer.onPlayerLeft = function() {
+        if (mode === 'online') {
+            alert('Opponent disconnected');
+            returnToMenu();
+        }
+    };
+
+    multiplayer.onGameStart = function(state) {
+        players = state.players;
+        localPlayerId = multiplayer.localPlayerId;
+        startGame();
+    };
+
+    multiplayer.onGameStateReceived = function(state) {
+        applyGameState(state);
+    };
+
+    multiplayer.onConnectionError = function(msg) {
+        var el = document.getElementById('join-status');
+        el.textContent = msg;
+        el.classList.remove('hidden');
+    };
+
+    multiplayer.onConnectionReady = function() {
+        var el = document.getElementById('join-status');
+        el.innerHTML = '<i class="fas fa-check"></i> Connected! Waiting for host...';
+    };
+}
+
+function bindEvents() {
+    // Mode buttons
+    document.getElementById('local-mode-btn').onclick = function() { selectMode('local'); };
+    document.getElementById('online-mode-btn').onclick = function() { selectMode('online'); };
+
+    // Local start
+    document.getElementById('start-local-btn').onclick = startLocalGame;
+
+    // Online buttons
+    document.getElementById('host-game-btn').onclick = hostGame;
+    document.getElementById('join-game-btn').onclick = showJoinPanel;
+    document.getElementById('cancel-host-btn').onclick = cancelHost;
+    document.getElementById('copy-code-btn').onclick = copyCode;
+    document.getElementById('connect-room-btn').onclick = connectToRoom;
+    document.getElementById('back-from-join-btn').onclick = showOnlineOptions;
+
+    // Game buttons
+    document.getElementById('play-again-btn').onclick = playAgain;
+    document.getElementById('back-btn').onclick = returnToMenu;
+    document.getElementById('restart-btn').onclick = playAgain;
+
+    // Board cells
+    var cells = document.querySelectorAll('.cell');
+    for (var i = 0; i < cells.length; i++) {
+        (function(index) {
+            cells[index].onclick = function() { cellClick(index); };
+        })(i);
     }
 
-    initUI() {
-        this.ui = {
-            setupScreen: document.getElementById('setup-screen'),
-            gameScreen: document.getElementById('game-screen'),
-            localModeBtn: document.getElementById('local-mode-btn'),
-            onlineModeBtn: document.getElementById('online-mode-btn'),
-            localSetup: document.getElementById('local-setup'),
-            onlineSetup: document.getElementById('online-setup'),
-            player1Name: document.getElementById('player1-name'),
-            player2Name: document.getElementById('player2-name'),
-            onlineOptionsPanel: document.getElementById('online-options-panel'),
-            onlineName: document.getElementById('online-name'),
-            hostGameBtn: document.getElementById('host-game-btn'),
-            joinGameBtn: document.getElementById('join-game-btn'),
-            hostGamePanel: document.getElementById('host-game-panel'),
-            hostStatus: document.getElementById('host-status'),
-            hostInfo: document.getElementById('host-info'),
-            hostRoomCode: document.getElementById('host-room-code'),
-            copyCodeBtn: document.getElementById('copy-code-btn'),
-            cancelHostBtn: document.getElementById('cancel-host-btn'),
-            joinGamePanel: document.getElementById('join-game-panel'),
-            roomCodeInput: document.getElementById('room-code-input'),
-            connectRoomBtn: document.getElementById('connect-room-btn'),
-            joinStatus: document.getElementById('join-status'),
-            backFromJoinBtn: document.getElementById('back-from-join-btn'),
-            startLocalBtn: document.getElementById('start-local-btn'),
-            board: document.getElementById('board'),
-            cells: document.querySelectorAll('.cell'),
-            turnIndicator: document.getElementById('turn-indicator'),
-            playerX: document.getElementById('player-x'),
-            playerO: document.getElementById('player-o'),
-            playerXName: document.getElementById('player-x-name'),
-            playerOName: document.getElementById('player-o-name'),
-            playerXScore: document.getElementById('player-x-score'),
-            playerOScore: document.getElementById('player-o-score'),
-            gameResult: document.getElementById('game-result'),
-            resultText: document.getElementById('result-text'),
-            playAgainBtn: document.getElementById('play-again-btn'),
-            backBtn: document.getElementById('back-btn'),
-            restartBtn: document.getElementById('restart-btn')
-        };
-    }
+    // Room code input
+    var input = document.getElementById('room-code-input');
+    input.oninput = function() {
+        this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    };
+    input.onkeypress = function(e) {
+        if (e.key === 'Enter') connectToRoom();
+    };
+}
 
-    setupMultiplayerCallbacks() {
-        this.multiplayer.onPlayerJoined = (data) => {
-            this.players[1].name = data.playerInfo.name;
-            const waitingEl = this.ui.hostInfo?.querySelector('.host-waiting');
-            if (waitingEl) {
-                waitingEl.innerHTML = `<i class="fas fa-check"></i> ${data.playerInfo.name} joined!`;
-            }
-            setTimeout(() => this.startOnlineGame(), 1000);
-        };
+function selectMode(m) {
+    mode = m;
+    document.getElementById('local-mode-btn').classList.toggle('active', m === 'local');
+    document.getElementById('online-mode-btn').classList.toggle('active', m === 'online');
+    document.getElementById('local-setup').classList.toggle('hidden', m !== 'local');
+    document.getElementById('online-setup').classList.toggle('hidden', m !== 'online');
+    if (m === 'online') showOnlineOptions();
+}
 
-        this.multiplayer.onPlayerLeft = () => {
-            if (this.mode === 'online') {
-                alert('Opponent disconnected');
-                this.returnToMenu();
-            }
-        };
+function showOnlineOptions() {
+    multiplayer.disconnect();
+    document.getElementById('online-options-panel').classList.remove('hidden');
+    document.getElementById('host-game-panel').classList.add('hidden');
+    document.getElementById('join-game-panel').classList.add('hidden');
+}
 
-        this.multiplayer.onGameStart = (state) => {
-            this.players = state.players;
-            this.localPlayerId = this.multiplayer.localPlayerId;
-            this.startGame();
-        };
+function showJoinPanel() {
+    document.getElementById('online-options-panel').classList.add('hidden');
+    document.getElementById('join-game-panel').classList.remove('hidden');
+    document.getElementById('join-status').classList.add('hidden');
+    document.getElementById('room-code-input').value = '';
+    document.getElementById('room-code-input').focus();
+}
 
-        this.multiplayer.onGameStateReceived = (state) => {
-            this.applyGameState(state);
-        };
+function hostGame() {
+    var name = document.getElementById('online-name').value.trim() || 'Player 1';
+    players[0].name = name;
 
-        this.multiplayer.onConnectionError = (msg) => {
-            if (this.ui.joinStatus) {
-                this.ui.joinStatus.textContent = msg;
-                this.ui.joinStatus.classList.remove('hidden');
-            }
-        };
+    document.getElementById('online-options-panel').classList.add('hidden');
+    document.getElementById('host-game-panel').classList.remove('hidden');
+    document.getElementById('host-status').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating room...';
+    document.getElementById('host-status').classList.remove('hidden');
+    document.getElementById('host-info').classList.add('hidden');
 
-        this.multiplayer.onConnectionReady = () => {
-            if (this.ui.joinStatus) {
-                this.ui.joinStatus.innerHTML = '<i class="fas fa-check"></i> Connected! Waiting for host...';
-            }
-        };
-    }
+    multiplayer.initAsHost({ name: name }).then(function(roomCode) {
+        localPlayerId = 0;
+        document.getElementById('host-status').classList.add('hidden');
+        document.getElementById('host-info').classList.remove('hidden');
+        document.getElementById('host-room-code').textContent = roomCode;
+    }).catch(function(err) {
+        document.getElementById('host-status').innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + (err.message || 'Failed');
+    });
+}
 
-    bindEvents() {
-        const on = (el, handler) => el?.addEventListener('click', handler);
+function copyCode() {
+    var code = document.getElementById('host-room-code').textContent;
+    if (!code) return;
 
-        on(this.ui.localModeBtn, () => this.selectMode('local'));
-        on(this.ui.onlineModeBtn, () => this.selectMode('online'));
-        on(this.ui.hostGameBtn, () => this.hostGame());
-        on(this.ui.joinGameBtn, () => this.showJoinPanel());
-        on(this.ui.cancelHostBtn, () => this.cancelHost());
-        on(this.ui.copyCodeBtn, () => this.copyCode());
-        on(this.ui.connectRoomBtn, () => this.connectToRoom());
-        on(this.ui.backFromJoinBtn, () => this.showOnlineOptions());
-        on(this.ui.startLocalBtn, () => this.startLocalGame());
-        on(this.ui.playAgainBtn, () => this.playAgain());
-        on(this.ui.backBtn, () => this.returnToMenu());
-        on(this.ui.restartBtn, () => this.playAgain());
-
-        this.ui.cells?.forEach((cell, i) => {
-            cell.addEventListener('click', () => this.handleCellClick(i));
+    // Try modern clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(function() {
+            showCopied();
+        }).catch(function() {
+            fallbackCopy(code);
         });
-
-        this.ui.roomCodeInput?.addEventListener('input', (e) => {
-            e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        });
-
-        this.ui.roomCodeInput?.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.connectToRoom();
-        });
-    }
-
-    selectMode(mode) {
-        this.mode = mode;
-        this.ui.localModeBtn?.classList.toggle('active', mode === 'local');
-        this.ui.onlineModeBtn?.classList.toggle('active', mode === 'online');
-        this.ui.localSetup?.classList.toggle('hidden', mode !== 'local');
-        this.ui.onlineSetup?.classList.toggle('hidden', mode !== 'online');
-        if (mode === 'online') this.showOnlineOptions();
-    }
-
-    showOnlineOptions() {
-        this.multiplayer?.disconnect();
-        this.ui.onlineOptionsPanel?.classList.remove('hidden');
-        this.ui.hostGamePanel?.classList.add('hidden');
-        this.ui.joinGamePanel?.classList.add('hidden');
-        this.ui.joinStatus?.classList.add('hidden');
-    }
-
-    showJoinPanel() {
-        this.ui.onlineOptionsPanel?.classList.add('hidden');
-        this.ui.joinGamePanel?.classList.remove('hidden');
-        this.ui.joinStatus?.classList.add('hidden');
-        if (this.ui.roomCodeInput) {
-            this.ui.roomCodeInput.value = '';
-            this.ui.roomCodeInput.focus();
-        }
-    }
-
-    async hostGame() {
-        const playerName = this.ui.onlineName?.value?.trim() || 'Player 1';
-        this.players[0].name = playerName;
-
-        this.ui.onlineOptionsPanel?.classList.add('hidden');
-        this.ui.hostGamePanel?.classList.remove('hidden');
-        if (this.ui.hostStatus) {
-            this.ui.hostStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating room...';
-            this.ui.hostStatus.classList.remove('hidden');
-        }
-        this.ui.hostInfo?.classList.add('hidden');
-
-        try {
-            const roomCode = await this.multiplayer.initAsHost({ name: playerName });
-            this.localPlayerId = 0;
-            this.ui.hostStatus?.classList.add('hidden');
-            this.ui.hostInfo?.classList.remove('hidden');
-            if (this.ui.hostRoomCode) this.ui.hostRoomCode.textContent = roomCode;
-        } catch (err) {
-            if (this.ui.hostStatus) {
-                this.ui.hostStatus.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${err.message || 'Failed to create room'}`;
-            }
-        }
-    }
-
-    copyCode() {
-        const code = this.ui.hostRoomCode?.textContent;
-        if (!code) return;
-
-        navigator.clipboard.writeText(code).then(() => {
-            const btn = this.ui.copyCodeBtn;
-            if (btn) {
-                const original = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-                setTimeout(() => { btn.innerHTML = original; }, 2000);
-            }
-        }).catch(() => {
-            // Fallback for older browsers
-            const input = document.createElement('input');
-            input.value = code;
-            document.body.appendChild(input);
-            input.select();
-            document.execCommand('copy');
-            document.body.removeChild(input);
-
-            const btn = this.ui.copyCodeBtn;
-            if (btn) {
-                const original = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-                setTimeout(() => { btn.innerHTML = original; }, 2000);
-            }
-        });
-    }
-
-    cancelHost() {
-        this.multiplayer?.disconnect();
-        this.showOnlineOptions();
-    }
-
-    async connectToRoom() {
-        const roomCode = (this.ui.roomCodeInput?.value?.trim() || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-        if (!roomCode || roomCode.length !== 6) {
-            if (this.ui.joinStatus) {
-                this.ui.joinStatus.textContent = 'Enter a 6-character room code';
-                this.ui.joinStatus.classList.remove('hidden');
-            }
-            return;
-        }
-
-        const playerName = this.ui.onlineName?.value?.trim() || 'Player 2';
-        if (this.ui.joinStatus) {
-            this.ui.joinStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
-            this.ui.joinStatus.classList.remove('hidden');
-        }
-
-        try {
-            await this.multiplayer.initAsGuest(roomCode, { name: playerName });
-            this.players[1].name = playerName;
-            this.localPlayerId = 1;
-        } catch (err) {
-            // Error handled by callback
-        }
-    }
-
-    startLocalGame() {
-        this.mode = 'local';
-        this.players[0].name = this.ui.player1Name?.value?.trim() || 'Player 1';
-        this.players[1].name = this.ui.player2Name?.value?.trim() || 'Player 2';
-        this.multiplayer?.initLocal();
-        this.startGame();
-    }
-
-    startOnlineGame() {
-        if (!this.multiplayer?.isHost) return;
-        this.multiplayer.startGame({ players: this.players });
-        this.startGame();
-    }
-
-    startGame() {
-        this.ui.setupScreen?.classList.remove('active');
-        this.ui.gameScreen?.classList.add('active');
-        this.resetBoard();
-        this.updatePlayerInfo();
-        this.updateTurnIndicator();
-    }
-
-    resetBoard() {
-        this.board = Array(9).fill(null);
-        this.currentPlayer = 0;
-        this.gameOver = false;
-        this.winner = null;
-        this.winningLine = null;
-
-        this.ui.cells?.forEach(cell => {
-            cell.textContent = '';
-            cell.className = 'cell';
-        });
-
-        this.ui.gameResult?.classList.add('hidden');
-        this.updateTurnIndicator();
-        this.updateActivePlayer();
-    }
-
-    updatePlayerInfo() {
-        if (this.ui.playerXName) this.ui.playerXName.textContent = this.players[0].name;
-        if (this.ui.playerOName) this.ui.playerOName.textContent = this.players[1].name;
-        if (this.ui.playerXScore) this.ui.playerXScore.textContent = this.players[0].score;
-        if (this.ui.playerOScore) this.ui.playerOScore.textContent = this.players[1].score;
-    }
-
-    updateTurnIndicator() {
-        const player = this.players[this.currentPlayer];
-        if (this.ui.turnIndicator) {
-            this.ui.turnIndicator.innerHTML = `<span class="player-symbol ${player.symbol.toLowerCase()}">${player.symbol}</span> ${player.name}'s Turn`;
-        }
-    }
-
-    updateActivePlayer() {
-        this.ui.playerX?.classList.toggle('active', this.currentPlayer === 0);
-        this.ui.playerO?.classList.toggle('active', this.currentPlayer === 1);
-    }
-
-    handleCellClick(index) {
-        if (this.gameOver || this.board[index] !== null) return;
-        if (this.multiplayer?.isOnline() && this.currentPlayer !== this.localPlayerId) return;
-
-        this.makeMove(index);
-        if (this.multiplayer?.isOnline()) {
-            this.multiplayer.sendGameState(this.getGameState());
-        }
-    }
-
-    makeMove(index) {
-        const symbol = this.players[this.currentPlayer].symbol;
-        this.board[index] = symbol;
-
-        const cell = this.ui.cells?.[index];
-        if (cell) {
-            cell.textContent = symbol;
-            cell.classList.add('taken', symbol.toLowerCase());
-        }
-
-        const result = this.checkWin();
-        if (result) {
-            this.endGame(result);
-        } else if (this.board.every(c => c !== null)) {
-            this.endGame('draw');
-        } else {
-            this.currentPlayer = 1 - this.currentPlayer;
-            this.updateTurnIndicator();
-            this.updateActivePlayer();
-        }
-    }
-
-    checkWin() {
-        for (const [a, b, c] of this.winPatterns) {
-            if (this.board[a] && this.board[a] === this.board[b] && this.board[a] === this.board[c]) {
-                this.winningLine = [a, b, c];
-                return this.board[a];
-            }
-        }
-        return null;
-    }
-
-    endGame(result) {
-        this.gameOver = true;
-
-        if (result === 'draw') {
-            if (this.ui.resultText) {
-                this.ui.resultText.textContent = "It's a draw!";
-                this.ui.resultText.className = 'result-text draw';
-            }
-        } else {
-            this.winner = this.currentPlayer;
-            const player = this.players[this.winner];
-            player.score++;
-            this.updatePlayerInfo();
-
-            if (this.ui.resultText) {
-                this.ui.resultText.textContent = `${player.name} wins!`;
-                this.ui.resultText.className = `result-text win-${result.toLowerCase()}`;
-            }
-
-            this.winningLine?.forEach(i => {
-                this.ui.cells?.[i]?.classList.add('winning');
-            });
-        }
-
-        this.ui.gameResult?.classList.remove('hidden');
-    }
-
-    playAgain() {
-        this.resetBoard();
-        if (this.multiplayer?.isOnline() && this.multiplayer?.isHost) {
-            this.multiplayer.sendGameState(this.getGameState());
-        }
-    }
-
-    getGameState() {
-        return {
-            board: this.board,
-            currentPlayer: this.currentPlayer,
-            players: this.players,
-            gameOver: this.gameOver,
-            winner: this.winner,
-            winningLine: this.winningLine
-        };
-    }
-
-    applyGameState(state) {
-        this.board = state.board;
-        this.currentPlayer = state.currentPlayer;
-        this.players = state.players;
-        this.gameOver = state.gameOver;
-        this.winner = state.winner;
-        this.winningLine = state.winningLine;
-
-        this.ui.cells?.forEach((cell, i) => {
-            const value = this.board[i];
-            cell.textContent = value || '';
-            cell.className = 'cell';
-            if (value) cell.classList.add('taken', value.toLowerCase());
-        });
-
-        this.updatePlayerInfo();
-        this.updateTurnIndicator();
-        this.updateActivePlayer();
-
-        if (this.gameOver) {
-            this.winningLine?.forEach(i => {
-                this.ui.cells?.[i]?.classList.add('winning');
-            });
-
-            if (this.winner !== null) {
-                const player = this.players[this.winner];
-                if (this.ui.resultText) {
-                    this.ui.resultText.textContent = `${player.name} wins!`;
-                    this.ui.resultText.className = `result-text win-${player.symbol.toLowerCase()}`;
-                }
-            } else {
-                if (this.ui.resultText) {
-                    this.ui.resultText.textContent = "It's a draw!";
-                    this.ui.resultText.className = 'result-text draw';
-                }
-            }
-            this.ui.gameResult?.classList.remove('hidden');
-        } else {
-            this.ui.gameResult?.classList.add('hidden');
-        }
-    }
-
-    returnToMenu() {
-        this.multiplayer?.disconnect();
-        this.players[0].score = 0;
-        this.players[1].score = 0;
-        this.ui.gameScreen?.classList.remove('active');
-        this.ui.setupScreen?.classList.add('active');
-        this.showOnlineOptions();
-        if (this.ui.roomCodeInput) this.ui.roomCodeInput.value = '';
+    } else {
+        fallbackCopy(code);
     }
 }
 
-// Initialize
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => { window.game = new TicTacToe(); });
-} else {
-    window.game = new TicTacToe();
+function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+        document.execCommand('copy');
+        showCopied();
+    } catch(e) {
+        alert('Copy failed. Code: ' + text);
+    }
+    document.body.removeChild(ta);
+}
+
+function showCopied() {
+    var btn = document.getElementById('copy-code-btn');
+    var orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+    setTimeout(function() { btn.innerHTML = orig; }, 2000);
+}
+
+function cancelHost() {
+    multiplayer.disconnect();
+    showOnlineOptions();
+}
+
+function connectToRoom() {
+    var code = document.getElementById('room-code-input').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    var status = document.getElementById('join-status');
+
+    if (code.length !== 6) {
+        status.textContent = 'Enter a 6-character code';
+        status.classList.remove('hidden');
+        return;
+    }
+
+    var name = document.getElementById('online-name').value.trim() || 'Player 2';
+    status.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+    status.classList.remove('hidden');
+
+    multiplayer.initAsGuest(code, { name: name }).then(function() {
+        players[1].name = name;
+        localPlayerId = 1;
+    }).catch(function() {
+        // Error shown via callback
+    });
+}
+
+function startLocalGame() {
+    mode = 'local';
+    players[0].name = document.getElementById('player1-name').value.trim() || 'Player 1';
+    players[1].name = document.getElementById('player2-name').value.trim() || 'Player 2';
+    multiplayer.initLocal();
+    startGame();
+}
+
+function startOnlineGame() {
+    if (!multiplayer.isHost) return;
+    multiplayer.startGame({ players: players });
+    startGame();
+}
+
+function startGame() {
+    document.getElementById('setup-screen').classList.remove('active');
+    document.getElementById('game-screen').classList.add('active');
+    resetBoard();
+    updateUI();
+}
+
+function resetBoard() {
+    board = [null,null,null,null,null,null,null,null,null];
+    currentPlayer = 0;
+    gameOver = false;
+
+    var cells = document.querySelectorAll('.cell');
+    for (var i = 0; i < cells.length; i++) {
+        cells[i].textContent = '';
+        cells[i].className = 'cell';
+    }
+
+    document.getElementById('game-result').classList.add('hidden');
+    updateUI();
+}
+
+function updateUI() {
+    // Player names and scores
+    document.getElementById('player-x-name').textContent = players[0].name;
+    document.getElementById('player-o-name').textContent = players[1].name;
+    document.getElementById('player-x-score').textContent = players[0].score;
+    document.getElementById('player-o-score').textContent = players[1].score;
+
+    // Turn indicator
+    var p = players[currentPlayer];
+    document.getElementById('turn-indicator').innerHTML =
+        '<span class="player-symbol ' + p.symbol.toLowerCase() + '">' + p.symbol + '</span> ' + p.name + "'s Turn";
+
+    // Active player highlight
+    document.getElementById('player-x').classList.toggle('active', currentPlayer === 0);
+    document.getElementById('player-o').classList.toggle('active', currentPlayer === 1);
+}
+
+function cellClick(index) {
+    if (gameOver || board[index] !== null) return;
+    if (multiplayer.isOnline() && currentPlayer !== localPlayerId) return;
+
+    makeMove(index);
+
+    if (multiplayer.isOnline()) {
+        multiplayer.sendGameState(getState());
+    }
+}
+
+function makeMove(index) {
+    var symbol = players[currentPlayer].symbol;
+    board[index] = symbol;
+
+    var cell = document.querySelectorAll('.cell')[index];
+    cell.textContent = symbol;
+    cell.classList.add('taken', symbol.toLowerCase());
+
+    var winner = checkWin();
+    if (winner) {
+        endGame(winner);
+    } else if (board.indexOf(null) === -1) {
+        endGame('draw');
+    } else {
+        currentPlayer = 1 - currentPlayer;
+        updateUI();
+    }
+}
+
+function checkWin() {
+    for (var i = 0; i < winPatterns.length; i++) {
+        var a = winPatterns[i][0], b = winPatterns[i][1], c = winPatterns[i][2];
+        if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+            // Highlight winning cells
+            var cells = document.querySelectorAll('.cell');
+            cells[a].classList.add('winning');
+            cells[b].classList.add('winning');
+            cells[c].classList.add('winning');
+            return board[a];
+        }
+    }
+    return null;
+}
+
+function endGame(result) {
+    gameOver = true;
+    var text = document.getElementById('result-text');
+
+    if (result === 'draw') {
+        text.textContent = "It's a draw!";
+        text.className = 'result-text draw';
+    } else {
+        var p = players[currentPlayer];
+        p.score++;
+        text.textContent = p.name + ' wins!';
+        text.className = 'result-text win-' + result.toLowerCase();
+        updateUI();
+    }
+
+    document.getElementById('game-result').classList.remove('hidden');
+}
+
+function playAgain() {
+    resetBoard();
+    if (multiplayer.isOnline() && multiplayer.isHost) {
+        multiplayer.sendGameState(getState());
+    }
+}
+
+function getState() {
+    return {
+        board: board,
+        currentPlayer: currentPlayer,
+        players: players,
+        gameOver: gameOver
+    };
+}
+
+function applyGameState(state) {
+    board = state.board;
+    currentPlayer = state.currentPlayer;
+    players = state.players;
+    gameOver = state.gameOver;
+
+    var cells = document.querySelectorAll('.cell');
+    for (var i = 0; i < cells.length; i++) {
+        var val = board[i];
+        cells[i].textContent = val || '';
+        cells[i].className = 'cell';
+        if (val) cells[i].classList.add('taken', val.toLowerCase());
+    }
+
+    updateUI();
+
+    if (gameOver) {
+        checkWin(); // Re-highlight winner
+        var text = document.getElementById('result-text');
+        if (board.indexOf(null) === -1 && !checkWin()) {
+            text.textContent = "It's a draw!";
+            text.className = 'result-text draw';
+        }
+        document.getElementById('game-result').classList.remove('hidden');
+    } else {
+        document.getElementById('game-result').classList.add('hidden');
+    }
+}
+
+function returnToMenu() {
+    multiplayer.disconnect();
+    players[0].score = 0;
+    players[1].score = 0;
+    document.getElementById('game-screen').classList.remove('active');
+    document.getElementById('setup-screen').classList.add('active');
+    showOnlineOptions();
 }
