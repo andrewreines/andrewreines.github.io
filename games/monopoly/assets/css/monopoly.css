@@ -319,15 +319,18 @@ body {
 }
 
 .room-code {
-    font-size: 1rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: #27ae60;
-    margin: 10px 0;
+    margin: 15px 0;
     font-family: monospace;
-    word-break: break-all;
-    padding: 10px;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 6px;
+    letter-spacing: 4px;
+    padding: 15px 20px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    border: 2px dashed rgba(39, 174, 96, 0.5);
+    user-select: all;
+    cursor: pointer;
 }
 
 .waiting-players {

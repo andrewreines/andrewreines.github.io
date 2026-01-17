@@ -373,74 +373,91 @@ const MonopolyGame = {
         const tokenEl = this.ui.hostTokenSelection.querySelector('.token-option.selected');
         const tokenId = tokenEl ? tokenEl.dataset.token : MonopolyData.tokens[0].id;
 
+        this.ui.generateRoomBtn.disabled = true;
+        this.ui.generateRoomBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+
         try {
-            const { roomCode, offerCode } = await SimpleSignaling.createInvite({
+            // Setup callbacks before initializing
+            this.setupMultiplayerCallbacks();
+
+            const roomCode = await MonopolyMultiplayer.initAsHost({
                 name,
                 token: tokenId
             });
 
-            this.ui.roomCode.textContent = offerCode.substring(0, 20) + '...';
-            this.ui.roomCode.dataset.fullCode = offerCode;
+            this.ui.roomCode.textContent = roomCode;
             this.ui.roomCodeDisplay.classList.remove('hidden');
-
-            // Setup multiplayer callbacks
-            this.setupMultiplayerCallbacks();
+            this.ui.generateRoomBtn.innerHTML = '<i class="fas fa-check"></i> Room Created';
 
         } catch (error) {
             console.error('Error creating room:', error);
             alert('Failed to create room. Please try again.');
+            this.ui.generateRoomBtn.disabled = false;
+            this.ui.generateRoomBtn.innerHTML = '<i class="fas fa-key"></i> Create Room';
         }
     },
 
     // Copy room code
     async copyRoomCode() {
-        const code = this.ui.roomCode.dataset.fullCode;
-        const success = await SimpleSignaling.copyToClipboard(code);
-        if (success) {
+        const code = this.ui.roomCode.textContent;
+        try {
+            await navigator.clipboard.writeText(code);
             this.ui.copyCodeBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
             setTimeout(() => {
-                this.ui.copyCodeBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                this.ui.copyCodeBtn.innerHTML = '<i class="fas fa-copy"></i> Copy Code';
+            }, 2000);
+        } catch (error) {
+            // Fallback for older browsers
+            const textarea = document.createElement('textarea');
+            textarea.value = code;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            this.ui.copyCodeBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            setTimeout(() => {
+                this.ui.copyCodeBtn.innerHTML = '<i class="fas fa-copy"></i> Copy Code';
             }, 2000);
         }
     },
 
     // Connect to room
     async connectToRoom() {
-        const offerCode = this.ui.roomCodeInput.value.trim();
+        const roomCode = this.ui.roomCodeInput.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
         const name = this.ui.joinName.value.trim() || 'Guest';
         const tokenEl = this.ui.joinTokenSelection.querySelector('.token-option.selected');
         const tokenId = tokenEl ? tokenEl.dataset.token : MonopolyData.tokens[1].id;
 
-        if (!offerCode) {
-            alert('Please enter the room code');
+        if (!roomCode || roomCode.length !== 12) {
+            alert('Please enter a valid 12-character room code');
             return;
         }
 
         this.ui.joinStatus.classList.remove('hidden');
         this.ui.joinStatusText.textContent = 'Connecting...';
+        this.ui.connectRoomBtn.disabled = true;
 
         try {
-            const answerCode = await SimpleSignaling.joinWithInvite(offerCode, {
+            // Setup callbacks before connecting
+            this.setupMultiplayerCallbacks();
+
+            await MonopolyMultiplayer.initAsGuest(roomCode, {
                 name,
                 token: tokenId
             });
 
-            if (answerCode) {
-                this.ui.joinStatusText.innerHTML = `
-                    Connected! Send this code back to host:<br>
-                    <textarea style="width:100%;height:60px;margin-top:10px;font-size:10px;">${answerCode}</textarea>
-                    <button class="btn btn-small" onclick="navigator.clipboard.writeText('${answerCode}')">
-                        <i class="fas fa-copy"></i> Copy
-                    </button>
-                `;
+            this.ui.joinStatusText.innerHTML = `
+                <i class="fas fa-check-circle" style="color: #27ae60; font-size: 2rem;"></i>
+                <p style="margin-top: 10px;">Connected! Waiting for host to start the game...</p>
+            `;
 
-                this.setupMultiplayerCallbacks();
-            } else {
-                this.ui.joinStatusText.textContent = 'Failed to connect. Invalid code.';
-            }
         } catch (error) {
             console.error('Error connecting:', error);
-            this.ui.joinStatusText.textContent = 'Connection failed.';
+            this.ui.joinStatusText.innerHTML = `
+                <i class="fas fa-times-circle" style="color: #e74c3c; font-size: 2rem;"></i>
+                <p style="margin-top: 10px;">${error.message || 'Connection failed. Check the code and try again.'}</p>
+            `;
+            this.ui.connectRoomBtn.disabled = false;
         }
     },
 
