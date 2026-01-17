@@ -166,6 +166,53 @@ class GameMultiplayer {
         }
     }
 
+    // Check if a room exists (quick check without joining)
+    async checkRoomExists(roomCode) {
+        return new Promise((resolve, reject) => {
+            const testPeer = new Peer({
+                debug: 0,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+
+            const timeout = setTimeout(() => {
+                testPeer.destroy();
+                resolve(false); // Timeout means no room found
+            }, 2000);
+
+            testPeer.on('open', () => {
+                const conn = testPeer.connect(roomCode, { reliable: true });
+
+                conn.on('open', () => {
+                    clearTimeout(timeout);
+                    conn.close();
+                    testPeer.destroy();
+                    resolve(true); // Room exists
+                });
+
+                conn.on('error', () => {
+                    clearTimeout(timeout);
+                    testPeer.destroy();
+                    resolve(false);
+                });
+            });
+
+            testPeer.on('error', (err) => {
+                clearTimeout(timeout);
+                testPeer.destroy();
+                if (err.type === 'peer-unavailable') {
+                    resolve(false); // Room doesn't exist
+                } else {
+                    reject(err);
+                }
+            });
+        });
+    }
+
     // Try to join an existing room (returns quickly if room doesn't exist)
     async tryJoinRoom(roomCode, playerInfo) {
         return new Promise((resolve, reject) => {

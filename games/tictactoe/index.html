@@ -66,68 +66,66 @@
 
                 <!-- Online Setup -->
                 <div id="online-setup" class="setup-section hidden">
-                    <!-- Proximity Mode (Primary) -->
-                    <div id="proximity-panel" class="online-panel">
-                        <h3>Play with Someone Nearby</h3>
-                        <p class="proximity-desc">Automatically find and connect with players in your area</p>
+                    <!-- Main Online Options -->
+                    <div id="online-options-panel" class="online-panel">
                         <div class="form-group">
                             <label>Your Name</label>
-                            <input type="text" id="proximity-name" placeholder="Enter your name" maxlength="15">
+                            <input type="text" id="online-name" placeholder="Enter your name" maxlength="15">
                         </div>
-                        <button id="find-nearby-btn" class="btn btn-primary btn-large">
-                            <i class="fas fa-map-marker-alt"></i> Find Nearby Players
-                        </button>
-                        <div id="proximity-status" class="proximity-status hidden"></div>
-                        <div class="manual-option">
-                            <span>Not nearby?</span>
-                            <button id="show-manual-btn" class="btn btn-link">Use room code instead</button>
-                        </div>
-                    </div>
-
-                    <!-- Manual Mode Options (Hidden by default) -->
-                    <div id="manual-options" class="hidden">
                         <div class="online-options">
-                            <button id="create-room-btn" class="btn btn-primary">
-                                <i class="fas fa-plus-circle"></i> Create Room
+                            <button id="host-game-btn" class="btn btn-primary">
+                                <i class="fas fa-broadcast-tower"></i> Host a Game
                             </button>
-                            <button id="join-room-btn" class="btn btn-secondary">
-                                <i class="fas fa-sign-in-alt"></i> Join Room
+                            <button id="find-games-btn" class="btn btn-secondary">
+                                <i class="fas fa-search-location"></i> Find Nearby Games
                             </button>
                         </div>
-                        <button id="back-to-proximity-btn" class="btn btn-link">
-                            <i class="fas fa-arrow-left"></i> Back to nearby mode
-                        </button>
+                        <div class="manual-option">
+                            <span>Have a room code?</span>
+                            <button id="show-code-btn" class="btn btn-link">Enter code manually</button>
+                        </div>
                     </div>
 
-                    <!-- Create Room -->
-                    <div id="create-room-panel" class="online-panel hidden">
-                        <h3>Create a Room</h3>
-                        <div class="form-group">
-                            <label>Your Name</label>
-                            <input type="text" id="host-name" placeholder="Enter your name" maxlength="15">
+                    <!-- Host Game Panel -->
+                    <div id="host-game-panel" class="online-panel hidden">
+                        <h3><i class="fas fa-broadcast-tower"></i> Hosting Game</h3>
+                        <div id="host-status" class="host-status">
+                            <i class="fas fa-spinner fa-spin"></i> Creating room...
                         </div>
-                        <button id="generate-room-btn" class="btn btn-primary">
-                            <i class="fas fa-key"></i> Create Room
-                        </button>
-                        <div id="room-code-display" class="room-code-display hidden">
-                            <p>Share this code with your friend:</p>
-                            <div class="room-code" id="room-code"></div>
-                            <button id="copy-code-btn" class="btn btn-small">
-                                <i class="fas fa-copy"></i> Copy Code
-                            </button>
-                            <div id="waiting-status" class="waiting-status">
-                                <i class="fas fa-spinner fa-spin"></i> Waiting for opponent...
+                        <div id="host-info" class="host-info hidden">
+                            <p class="host-waiting"><i class="fas fa-spinner fa-spin"></i> Waiting for nearby players to join...</p>
+                            <p class="host-hint">Other players can find your game by clicking "Find Nearby Games"</p>
+                            <div class="room-code-fallback">
+                                <p>Or share this code:</p>
+                                <div class="room-code" id="host-room-code"></div>
+                                <button id="copy-host-code-btn" class="btn btn-small">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
                             </div>
                         </div>
+                        <button id="cancel-host-btn" class="btn btn-link">
+                            <i class="fas fa-arrow-left"></i> Cancel
+                        </button>
                     </div>
 
-                    <!-- Join Room -->
-                    <div id="join-room-panel" class="online-panel hidden">
-                        <h3>Join a Room</h3>
-                        <div class="form-group">
-                            <label>Your Name</label>
-                            <input type="text" id="join-name" placeholder="Enter your name" maxlength="15">
+                    <!-- Find Games Panel -->
+                    <div id="find-games-panel" class="online-panel hidden">
+                        <h3><i class="fas fa-search-location"></i> Finding Nearby Games</h3>
+                        <div id="find-status" class="find-status">
+                            <i class="fas fa-spinner fa-spin"></i> Searching for nearby games...
                         </div>
+                        <div id="games-list" class="games-list hidden"></div>
+                        <button id="refresh-games-btn" class="btn btn-secondary hidden">
+                            <i class="fas fa-sync-alt"></i> Search Again
+                        </button>
+                        <button id="cancel-find-btn" class="btn btn-link">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </button>
+                    </div>
+
+                    <!-- Manual Code Entry Panel -->
+                    <div id="code-entry-panel" class="online-panel hidden">
+                        <h3>Enter Room Code</h3>
                         <div class="form-group">
                             <label>Room Code (12 characters)</label>
                             <input type="text" id="room-code-input" placeholder="Enter code" maxlength="12">
@@ -136,7 +134,11 @@
                             <i class="fas fa-plug"></i> Join Room
                         </button>
                         <div id="join-status" class="join-status hidden"></div>
+                        <button id="back-from-code-btn" class="btn btn-link">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </button>
                     </div>
+
                 </div>
             </div>
         </div>

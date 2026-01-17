@@ -549,6 +549,112 @@ body {
     color: rgba(255, 255, 255, 0.7);
 }
 
+/* Host Game Panel */
+.host-status,
+.find-status {
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 15px;
+}
+
+.host-status i,
+.find-status i {
+    margin-right: 8px;
+}
+
+.host-info {
+    background: rgba(52, 152, 219, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+}
+
+.host-waiting {
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    color: #fff;
+}
+
+.host-hint {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 20px;
+}
+
+.room-code-fallback {
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.room-code-fallback p {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 10px;
+}
+
+/* Find Games Panel */
+.games-list {
+    margin: 15px 0;
+}
+
+.game-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+.game-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.game-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.game-item-host {
+    font-weight: 600;
+}
+
+.game-item-distance {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* Code Entry Panel */
+#code-entry-panel .form-group input {
+    text-align: center;
+    font-size: 1.2rem;
+}
+
+/* Online Options Panel - first panel has no top border */
+#online-options-panel {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+}
+
+/* Cancel/Back buttons styling */
+#cancel-host-btn,
+#cancel-find-btn,
+#back-from-code-btn {
+    margin-top: 15px;
+    width: 100%;
+}
+
+#refresh-games-btn {
+    width: 100%;
+    margin-top: 10px;
+}
+
 /* Tablet+ */
 @media (min-width: 600px) {
     .setup-container {
