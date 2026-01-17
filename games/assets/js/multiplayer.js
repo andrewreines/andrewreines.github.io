@@ -1,397 +1,203 @@
-/**
- * Shared Multiplayer Module
- * Reusable peer-to-peer multiplayer using PeerJS
- * Can be used by any game in the arcade
- */
+// Simple Multiplayer Module using PeerJS
 
-class GameMultiplayer {
-    constructor(options = {}) {
-        this.mode = 'local';
-        this.isHost = false;
-        this.peer = null;
-        this.connections = [];
-        this.localPlayerId = null;
-        this.roomCode = null;
-        this.playerInfo = null;
-        this.maxPlayers = options.maxPlayers || 2;
-        this.codeLength = 6; // Fixed 6-character room codes
-        this.gameType = options.gameType || 'game';
+function GameMultiplayer(options) {
+    this.mode = 'local';
+    this.isHost = false;
+    this.peer = null;
+    this.conn = null;
+    this.roomCode = null;
+    this.localPlayerId = 0;
+    this.maxPlayers = (options && options.maxPlayers) || 2;
 
-        // Callbacks - set these after instantiation
-        this.onPlayerJoined = null;
-        this.onPlayerLeft = null;
-        this.onGameStateReceived = null;
-        this.onMessage = null;
-        this.onConnectionReady = null;
-        this.onConnectionError = null;
-        this.onGameStart = null;
-    }
-
-    // Generate 6-character room code
-    generateRoomCode() {
-        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-        let code = '';
-        for (let i = 0; i < this.codeLength; i++) {
-            code += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return code;
-    }
-
-    // Initialize for local play
-    initLocal() {
-        this.mode = 'local';
-        this.isHost = true;
-        this.localPlayerId = 0;
-        return Promise.resolve();
-    }
-
-    // Initialize as host
-    async initAsHost(playerInfo) {
-        this.mode = 'online';
-        this.isHost = true;
-        this.localPlayerId = 0;
-        this.playerInfo = playerInfo;
-        this.roomCode = this.generateRoomCode();
-
-        return new Promise((resolve, reject) => {
-            let timeoutId = null;
-            let settled = false;
-
-            const cleanup = () => {
-                if (timeoutId) {
-                    clearTimeout(timeoutId);
-                    timeoutId = null;
-                }
-            };
-
-            const safeResolve = (value) => {
-                if (!settled) {
-                    settled = true;
-                    cleanup();
-                    resolve(value);
-                }
-            };
-
-            const safeReject = (err) => {
-                if (!settled) {
-                    settled = true;
-                    cleanup();
-                    reject(err);
-                }
-            };
-
-            this.peer = new Peer(this.roomCode, {
-                debug: 0,
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                }
-            });
-
-            this.peer.on('open', (id) => {
-                console.log('Host ready:', id);
-                safeResolve(this.roomCode);
-            });
-
-            this.peer.on('connection', (conn) => {
-                this.handleIncomingConnection(conn);
-            });
-
-            this.peer.on('error', (err) => {
-                console.error('PeerJS error:', err);
-                if (err.type === 'unavailable-id') {
-                    // Room code collision - generate a new one
-                    cleanup();
-                    this.roomCode = this.generateRoomCode();
-                    this.peer.destroy();
-                    this.initAsHost(playerInfo).then(safeResolve).catch(safeReject);
-                } else {
-                    if (this.onConnectionError) {
-                        this.onConnectionError(err.message || 'Connection error');
-                    }
-                    safeReject(err);
-                }
-            });
-
-            timeoutId = setTimeout(() => {
-                if (!this.peer || !this.peer.open) {
-                    safeReject(new Error('Connection timeout'));
-                }
-            }, 15000);
-        });
-    }
-
-    // Handle incoming connection (host only)
-    handleIncomingConnection(conn) {
-        if (this.connections.length >= this.maxPlayers - 1) {
-            conn.close();
-            return;
-        }
-
-        conn.on('open', () => {
-            const playerId = this.connections.length + 1;
-            const connData = {
-                id: conn.peer,
-                conn: conn,
-                playerId: playerId,
-                playerInfo: null
-            };
-            this.connections.push(connData);
-
-            conn.send({ type: 'requestInfo' });
-
-            conn.on('data', (data) => this.handleMessage(data, conn.peer));
-            conn.on('close', () => this.handleDisconnection(conn.peer));
-        });
-    }
-
-    // Initialize as guest
-    async initAsGuest(roomCode, playerInfo) {
-        this.mode = 'online';
-        this.isHost = false;
-        this.playerInfo = playerInfo;
-        this.roomCode = roomCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-        return new Promise((resolve, reject) => {
-            let timeoutId = null;
-            let settled = false;
-
-            const cleanup = () => {
-                if (timeoutId) {
-                    clearTimeout(timeoutId);
-                    timeoutId = null;
-                }
-            };
-
-            const safeResolve = (value) => {
-                if (!settled) {
-                    settled = true;
-                    cleanup();
-                    resolve(value);
-                }
-            };
-
-            const safeReject = (err) => {
-                if (!settled) {
-                    settled = true;
-                    cleanup();
-                    reject(err);
-                }
-            };
-
-            this.peer = new Peer({
-                debug: 0,
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                }
-            });
-
-            this.peer.on('open', () => {
-                const conn = this.peer.connect(this.roomCode, { reliable: true });
-
-                conn.on('open', () => {
-                    this.connections.push({
-                        id: this.roomCode,
-                        conn: conn,
-                        playerId: 0,
-                        isHost: true
-                    });
-
-                    conn.on('data', (data) => this.handleMessage(data, this.roomCode));
-                    conn.on('close', () => this.handleDisconnection(this.roomCode));
-                    safeResolve(true);
-                });
-
-                conn.on('error', (err) => {
-                    if (this.onConnectionError) {
-                        this.onConnectionError('Could not connect to room');
-                    }
-                    safeReject(err);
-                });
-            });
-
-            this.peer.on('error', (err) => {
-                let errorMsg = 'Connection error';
-                if (err.type === 'peer-unavailable') {
-                    errorMsg = 'Room not found. Check the code and try again.';
-                }
-                if (this.onConnectionError) {
-                    this.onConnectionError(errorMsg);
-                }
-                safeReject(new Error(errorMsg));
-            });
-
-            timeoutId = setTimeout(() => {
-                if (this.connections.length === 0) {
-                    safeReject(new Error('Connection timeout'));
-                }
-            }, 15000);
-        });
-    }
-
-    // Handle messages
-    handleMessage(data, fromPeerId) {
-        switch (data.type) {
-            case 'requestInfo':
-                this.sendTo(fromPeerId, { type: 'playerInfo', info: this.playerInfo });
-                break;
-
-            case 'playerInfo':
-                const conn = this.connections.find(c => c.id === fromPeerId);
-                if (conn) {
-                    conn.playerInfo = data.info;
-                    if (this.onPlayerJoined) {
-                        this.onPlayerJoined({ playerId: conn.playerId, playerInfo: data.info });
-                    }
-                    // Send acknowledgment back to guest so they know connection is ready
-                    this.sendTo(fromPeerId, { type: 'connectionReady' });
-                }
-                if (this.onConnectionReady) {
-                    this.onConnectionReady(fromPeerId);
-                }
-                break;
-
-            case 'connectionReady':
-                // Guest receives this after host confirms connection
-                if (this.onConnectionReady) {
-                    this.onConnectionReady(fromPeerId);
-                }
-                break;
-
-            case 'gameState':
-                // Process the game state locally
-                if (this.onGameStateReceived) {
-                    this.onGameStateReceived(data.state);
-                }
-                // If we're the host and received state from a guest, relay to other guests
-                if (this.isHost && data.fromPlayerId !== undefined) {
-                    this.relayGameState(data.state, fromPeerId);
-                }
-                break;
-
-            case 'assignPlayerId':
-                this.localPlayerId = data.playerId;
-                break;
-
-            case 'gameStart':
-                if (this.onGameStart) {
-                    this.onGameStart(data.state);
-                }
-                break;
-
-            case 'gameMessage':
-                if (this.onMessage) {
-                    this.onMessage(data.payload, data.playerId);
-                }
-                break;
-
-            default:
-                if (this.onMessage) {
-                    this.onMessage(data, fromPeerId);
-                }
-        }
-    }
-
-    // Handle disconnection
-    handleDisconnection(peerId) {
-        const index = this.connections.findIndex(c => c.id === peerId);
-        if (index !== -1) {
-            const conn = this.connections[index];
-            this.connections.splice(index, 1);
-            if (this.onPlayerLeft) {
-                this.onPlayerLeft(conn.playerId);
-            }
-        }
-    }
-
-    // Send to all
-    broadcast(message) {
-        for (const conn of this.connections) {
-            if (conn.conn && conn.conn.open) {
-                conn.conn.send(message);
-            }
-        }
-    }
-
-    // Send to specific peer
-    sendTo(peerId, message) {
-        const conn = this.connections.find(c => c.id === peerId);
-        if (conn && conn.conn && conn.conn.open) {
-            conn.conn.send(message);
-        }
-    }
-
-    // Send game state (works for both host and guest)
-    sendGameState(state) {
-        if (this.isHost) {
-            // Host broadcasts to all connected guests
-            this.broadcast({ type: 'gameState', state });
-        } else {
-            // Guest sends to host (host will relay to other guests if needed)
-            this.broadcast({
-                type: 'gameState',
-                state,
-                fromPlayerId: this.localPlayerId
-            });
-        }
-    }
-
-    // Relay game state to all guests except the sender (host only)
-    relayGameState(state, excludePeerId) {
-        if (!this.isHost) return;
-        for (const conn of this.connections) {
-            if (conn.conn && conn.conn.open && conn.id !== excludePeerId) {
-                conn.conn.send({ type: 'gameState', state });
-            }
-        }
-    }
-
-    // Send game message
-    sendMessage(payload) {
-        this.broadcast({
-            type: 'gameMessage',
-            payload,
-            playerId: this.localPlayerId
-        });
-    }
-
-    // Start game (host)
-    startGame(state) {
-        if (!this.isHost) return;
-        this.connections.forEach((conn, i) => {
-            conn.playerId = i + 1;
-            this.sendTo(conn.id, { type: 'assignPlayerId', playerId: i + 1 });
-        });
-        this.broadcast({ type: 'gameStart', state });
-    }
-
-    // Getters
-    isOnline() { return this.mode === 'online'; }
-    getConnectedCount() { return this.connections.filter(c => c.conn && c.conn.open).length; }
-    getConnectedPlayers() {
-        return this.connections
-            .filter(c => c.conn && c.conn.open && c.playerInfo)
-            .map(c => ({ playerId: c.playerId, ...c.playerInfo }));
-    }
-    getRoomCode() { return this.roomCode; }
-
-    // Cleanup
-    disconnect() {
-        if (this.peer) {
-            this.peer.destroy();
-            this.peer = null;
-        }
-        this.connections = [];
-        this.mode = 'local';
-        this.isHost = false;
-        this.roomCode = null;
-    }
+    // Callbacks - set these after creating instance
+    this.onPlayerJoined = null;
+    this.onPlayerLeft = null;
+    this.onGameStateReceived = null;
+    this.onConnectionReady = null;
+    this.onConnectionError = null;
+    this.onGameStart = null;
 }
 
-// Export globally
+GameMultiplayer.prototype.generateRoomCode = function() {
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    var code = '';
+    for (var i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+};
+
+GameMultiplayer.prototype.initLocal = function() {
+    this.mode = 'local';
+    this.isHost = true;
+    this.localPlayerId = 0;
+};
+
+GameMultiplayer.prototype.initAsHost = function(playerInfo) {
+    var self = this;
+    this.mode = 'online';
+    this.isHost = true;
+    this.localPlayerId = 0;
+    this.roomCode = this.generateRoomCode();
+
+    return new Promise(function(resolve, reject) {
+        self.peer = new Peer(self.roomCode, {
+            debug: 0,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        });
+
+        self.peer.on('open', function() {
+            resolve(self.roomCode);
+        });
+
+        self.peer.on('connection', function(conn) {
+            self.conn = conn;
+
+            conn.on('open', function() {
+                conn.send({ type: 'requestInfo' });
+            });
+
+            conn.on('data', function(data) {
+                self.handleMessage(data);
+            });
+
+            conn.on('close', function() {
+                if (self.onPlayerLeft) self.onPlayerLeft();
+            });
+        });
+
+        self.peer.on('error', function(err) {
+            if (err.type === 'unavailable-id') {
+                // Code taken, try again
+                self.roomCode = self.generateRoomCode();
+                self.peer.destroy();
+                self.initAsHost(playerInfo).then(resolve).catch(reject);
+            } else {
+                if (self.onConnectionError) self.onConnectionError(err.message);
+                reject(err);
+            }
+        });
+
+        setTimeout(function() {
+            if (!self.peer || !self.peer.open) {
+                reject(new Error('Connection timeout'));
+            }
+        }, 15000);
+    });
+};
+
+GameMultiplayer.prototype.initAsGuest = function(roomCode, playerInfo) {
+    var self = this;
+    this.mode = 'online';
+    this.isHost = false;
+    this.playerInfo = playerInfo;
+    this.roomCode = roomCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    return new Promise(function(resolve, reject) {
+        self.peer = new Peer({
+            debug: 0,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        });
+
+        self.peer.on('open', function() {
+            self.conn = self.peer.connect(self.roomCode, { reliable: true });
+
+            self.conn.on('open', function() {
+                self.conn.on('data', function(data) {
+                    self.handleMessage(data);
+                });
+
+                self.conn.on('close', function() {
+                    if (self.onPlayerLeft) self.onPlayerLeft();
+                });
+
+                resolve();
+            });
+
+            self.conn.on('error', function(err) {
+                if (self.onConnectionError) self.onConnectionError('Could not connect');
+                reject(err);
+            });
+        });
+
+        self.peer.on('error', function(err) {
+            var msg = 'Connection error';
+            if (err.type === 'peer-unavailable') {
+                msg = 'Room not found';
+            }
+            if (self.onConnectionError) self.onConnectionError(msg);
+            reject(new Error(msg));
+        });
+
+        setTimeout(function() {
+            if (!self.conn || !self.conn.open) {
+                reject(new Error('Connection timeout'));
+            }
+        }, 15000);
+    });
+};
+
+GameMultiplayer.prototype.handleMessage = function(data) {
+    if (data.type === 'requestInfo') {
+        this.conn.send({ type: 'playerInfo', info: this.playerInfo });
+    }
+    else if (data.type === 'playerInfo') {
+        if (this.onPlayerJoined) {
+            this.onPlayerJoined({ playerId: 1, playerInfo: data.info });
+        }
+        this.conn.send({ type: 'connectionReady' });
+        if (this.onConnectionReady) this.onConnectionReady();
+    }
+    else if (data.type === 'connectionReady') {
+        if (this.onConnectionReady) this.onConnectionReady();
+    }
+    else if (data.type === 'gameStart') {
+        if (this.onGameStart) this.onGameStart(data.state);
+    }
+    else if (data.type === 'gameState') {
+        if (this.onGameStateReceived) this.onGameStateReceived(data.state);
+    }
+    else if (data.type === 'assignPlayerId') {
+        this.localPlayerId = data.playerId;
+    }
+};
+
+GameMultiplayer.prototype.startGame = function(state) {
+    if (!this.isHost || !this.conn) return;
+    this.conn.send({ type: 'assignPlayerId', playerId: 1 });
+    this.conn.send({ type: 'gameStart', state: state });
+};
+
+GameMultiplayer.prototype.sendGameState = function(state) {
+    if (this.conn && this.conn.open) {
+        this.conn.send({ type: 'gameState', state: state });
+    }
+};
+
+GameMultiplayer.prototype.isOnline = function() {
+    return this.mode === 'online';
+};
+
+GameMultiplayer.prototype.disconnect = function() {
+    if (this.peer) {
+        this.peer.destroy();
+        this.peer = null;
+    }
+    this.conn = null;
+    this.mode = 'local';
+    this.isHost = false;
+    this.roomCode = null;
+};
+
+// Export
 window.GameMultiplayer = GameMultiplayer;
