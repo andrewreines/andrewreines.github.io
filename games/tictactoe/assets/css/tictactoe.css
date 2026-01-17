@@ -264,6 +264,60 @@ body {
     text-align: center;
 }
 
+/* Proximity Mode */
+.proximity-desc {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.proximity-status {
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.proximity-status i {
+    margin-right: 8px;
+}
+
+.manual-option {
+    margin-top: 20px;
+    text-align: center;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9rem;
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: var(--o-color);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 5px 10px;
+    text-decoration: underline;
+    min-height: auto;
+}
+
+.btn-link:hover {
+    color: #5dade2;
+}
+
+#manual-options {
+    text-align: center;
+}
+
+#back-to-proximity-btn {
+    margin-top: 15px;
+}
+
 /* Buttons */
 .btn {
     padding: 14px 20px;

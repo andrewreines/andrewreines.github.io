@@ -66,12 +66,36 @@
 
                 <!-- Online Setup -->
                 <div id="online-setup" class="setup-section hidden">
-                    <div class="online-options">
-                        <button id="create-room-btn" class="btn btn-primary">
-                            <i class="fas fa-plus-circle"></i> Create Room
+                    <!-- Proximity Mode (Primary) -->
+                    <div id="proximity-panel" class="online-panel">
+                        <h3>Play with Someone Nearby</h3>
+                        <p class="proximity-desc">Automatically find and connect with players in your area</p>
+                        <div class="form-group">
+                            <label>Your Name</label>
+                            <input type="text" id="proximity-name" placeholder="Enter your name" maxlength="15">
+                        </div>
+                        <button id="find-nearby-btn" class="btn btn-primary btn-large">
+                            <i class="fas fa-map-marker-alt"></i> Find Nearby Players
                         </button>
-                        <button id="join-room-btn" class="btn btn-secondary">
-                            <i class="fas fa-sign-in-alt"></i> Join Room
+                        <div id="proximity-status" class="proximity-status hidden"></div>
+                        <div class="manual-option">
+                            <span>Not nearby?</span>
+                            <button id="show-manual-btn" class="btn btn-link">Use room code instead</button>
+                        </div>
+                    </div>
+
+                    <!-- Manual Mode Options (Hidden by default) -->
+                    <div id="manual-options" class="hidden">
+                        <div class="online-options">
+                            <button id="create-room-btn" class="btn btn-primary">
+                                <i class="fas fa-plus-circle"></i> Create Room
+                            </button>
+                            <button id="join-room-btn" class="btn btn-secondary">
+                                <i class="fas fa-sign-in-alt"></i> Join Room
+                            </button>
+                        </div>
+                        <button id="back-to-proximity-btn" class="btn btn-link">
+                            <i class="fas fa-arrow-left"></i> Back to nearby mode
                         </button>
                     </div>
 
