@@ -1,13 +1,14 @@
 /**
  * Monopoly Multiplayer Module
- * Handles both local (hot-seat) and online (WebRTC) multiplayer
- * 100% frontend-only implementation
+ * Handles both local (hot-seat) and online (PeerJS) multiplayer
+ * 100% frontend-only implementation using PeerJS for signaling
  */
 
 const MonopolyMultiplayer = {
     // Connection state
     mode: 'local', // 'local' or 'online'
     isHost: false,
+    peer: null,
     connections: [], // Array of peer connections
     localPlayerId: null,
     roomCode: null,
@@ -21,17 +22,6 @@ const MonopolyMultiplayer = {
     onConnectionError: null,
     onConnectionReady: null,
 
-    // WebRTC configuration
-    rtcConfig: {
-        iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' }
-        ]
-    },
-
     // Initialize for local play
     initLocal() {
         this.mode = 'local';
@@ -40,296 +30,228 @@ const MonopolyMultiplayer = {
         console.log('Multiplayer: Local mode initialized');
     },
 
+    // Generate a 12-character room code
+    generateRoomCode() {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let code = '';
+        for (let i = 0; i < 12; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return code;
+    },
+
     // Initialize as host for online play
     async initAsHost(playerInfo) {
         this.mode = 'online';
         this.isHost = true;
         this.localPlayerId = 0;
         this.roomCode = this.generateRoomCode();
-        this.pendingConnections = new Map();
+        this.hostInfo = playerInfo;
 
-        console.log('Multiplayer: Host mode initialized, room code:', this.roomCode);
-        return this.roomCode;
-    },
-
-    // Generate a random room code
-    generateRoomCode() {
-        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-        let code = '';
-        for (let i = 0; i < 6; i++) {
-            code += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return code;
-    },
-
-    // Create offer for a new connection (host)
-    async createOffer() {
-        const pc = new RTCPeerConnection(this.rtcConfig);
-        const connectionId = Date.now().toString();
-
-        // Create data channel
-        const dc = pc.createDataChannel('game', {
-            ordered: true
-        });
-
-        this.setupDataChannel(dc, connectionId);
-
-        // Handle ICE candidates
-        const iceCandidates = [];
-        pc.onicecandidate = (event) => {
-            if (event.candidate) {
-                iceCandidates.push(event.candidate);
-            }
-        };
-
-        // Create offer
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        // Wait for ICE gathering to complete
-        await new Promise((resolve) => {
-            if (pc.iceGatheringState === 'complete') {
-                resolve();
-            } else {
-                pc.onicegatheringstatechange = () => {
-                    if (pc.iceGatheringState === 'complete') {
-                        resolve();
-                    }
-                };
-                // Timeout after 5 seconds
-                setTimeout(resolve, 5000);
-            }
-        });
-
-        // Store pending connection
-        this.pendingConnections.set(connectionId, {
-            pc,
-            dc,
-            iceCandidates
-        });
-
-        // Encode the offer and candidates
-        const offerData = {
-            type: 'offer',
-            connectionId,
-            roomCode: this.roomCode,
-            sdp: pc.localDescription,
-            candidates: iceCandidates
-        };
-
-        return this.encodeConnectionData(offerData);
-    },
-
-    // Process answer from guest (host)
-    async processAnswer(answerCode) {
-        try {
-            const answerData = this.decodeConnectionData(answerCode);
-
-            if (!answerData || answerData.type !== 'answer') {
-                throw new Error('Invalid answer code');
-            }
-
-            const pending = this.pendingConnections.get(answerData.connectionId);
-            if (!pending) {
-                throw new Error('Connection not found');
-            }
-
-            const { pc } = pending;
-
-            // Set remote description
-            await pc.setRemoteDescription(answerData.sdp);
-
-            // Add ICE candidates
-            for (const candidate of answerData.candidates) {
-                await pc.addIceCandidate(candidate);
-            }
-
-            // Move to active connections
-            this.connections.push({
-                id: answerData.connectionId,
-                pc,
-                dc: pending.dc,
-                playerId: this.connections.length + 1,
-                playerInfo: answerData.playerInfo
+        return new Promise((resolve, reject) => {
+            // Create peer with the room code as ID
+            this.peer = new Peer(this.roomCode, {
+                debug: 1
             });
 
-            this.pendingConnections.delete(answerData.connectionId);
+            this.peer.on('open', (id) => {
+                console.log('Multiplayer: Host ready with room code:', id);
+                resolve(this.roomCode);
+            });
 
-            console.log('Multiplayer: Guest connected', answerData.playerInfo);
+            this.peer.on('connection', (conn) => {
+                this.handleIncomingConnection(conn);
+            });
 
-            if (this.onPlayerJoined) {
-                this.onPlayerJoined({
-                    playerId: this.connections.length,
-                    playerInfo: answerData.playerInfo
-                });
-            }
+            this.peer.on('error', (err) => {
+                console.error('PeerJS error:', err);
+                if (err.type === 'unavailable-id') {
+                    // Room code already taken, generate a new one
+                    this.roomCode = this.generateRoomCode();
+                    this.peer.destroy();
+                    this.initAsHost(playerInfo).then(resolve).catch(reject);
+                } else {
+                    if (this.onConnectionError) {
+                        this.onConnectionError(err.message || 'Connection error');
+                    }
+                    reject(err);
+                }
+            });
 
-            return true;
-        } catch (error) {
-            console.error('Error processing answer:', error);
-            if (this.onConnectionError) {
-                this.onConnectionError(error.message);
-            }
-            return false;
-        }
+            // Timeout after 10 seconds
+            setTimeout(() => {
+                if (!this.peer || !this.peer.open) {
+                    reject(new Error('Connection timeout'));
+                }
+            }, 10000);
+        });
+    },
+
+    // Handle incoming connection (host)
+    handleIncomingConnection(conn) {
+        console.log('Incoming connection from:', conn.peer);
+
+        conn.on('open', () => {
+            const playerId = this.connections.length + 1;
+
+            this.connections.push({
+                id: conn.peer,
+                conn: conn,
+                playerId: playerId,
+                playerInfo: null
+            });
+
+            // Request player info
+            conn.send({
+                type: 'requestInfo'
+            });
+
+            conn.on('data', (data) => {
+                this.handleMessage(data, conn.peer);
+            });
+
+            conn.on('close', () => {
+                this.handleDisconnection(conn.peer);
+            });
+        });
+
+        conn.on('error', (err) => {
+            console.error('Connection error:', err);
+        });
     },
 
     // Initialize as guest for online play
-    async initAsGuest(offerCode, playerInfo) {
+    async initAsGuest(roomCode, playerInfo) {
         this.mode = 'online';
         this.isHost = false;
+        this.roomCode = roomCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        this.guestInfo = playerInfo;
 
-        try {
-            const offerData = this.decodeConnectionData(offerCode);
-
-            if (!offerData || offerData.type !== 'offer') {
-                throw new Error('Invalid room code');
-            }
-
-            this.roomCode = offerData.roomCode;
-
-            const pc = new RTCPeerConnection(this.rtcConfig);
-
-            // Handle incoming data channel
-            pc.ondatachannel = (event) => {
-                this.setupDataChannel(event.channel, offerData.connectionId);
-            };
-
-            // Handle ICE candidates
-            const iceCandidates = [];
-            pc.onicecandidate = (event) => {
-                if (event.candidate) {
-                    iceCandidates.push(event.candidate);
-                }
-            };
-
-            // Set remote description (offer)
-            await pc.setRemoteDescription(offerData.sdp);
-
-            // Add ICE candidates from offer
-            for (const candidate of offerData.candidates) {
-                await pc.addIceCandidate(candidate);
-            }
-
-            // Create answer
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-
-            // Wait for ICE gathering
-            await new Promise((resolve) => {
-                if (pc.iceGatheringState === 'complete') {
-                    resolve();
-                } else {
-                    pc.onicegatheringstatechange = () => {
-                        if (pc.iceGatheringState === 'complete') {
-                            resolve();
-                        }
-                    };
-                    setTimeout(resolve, 5000);
-                }
+        return new Promise((resolve, reject) => {
+            // Create peer with random ID
+            this.peer = new Peer({
+                debug: 1
             });
 
-            // Store connection
-            this.connections.push({
-                id: offerData.connectionId,
-                pc,
-                dc: null, // Will be set when data channel opens
-                playerId: 0, // Host
-                isHost: true
+            this.peer.on('open', (id) => {
+                console.log('Multiplayer: Guest peer created:', id);
+
+                // Connect to host
+                const conn = this.peer.connect(this.roomCode, {
+                    reliable: true
+                });
+
+                conn.on('open', () => {
+                    console.log('Connected to host');
+
+                    this.connections.push({
+                        id: this.roomCode,
+                        conn: conn,
+                        playerId: 0,
+                        isHost: true
+                    });
+
+                    conn.on('data', (data) => {
+                        this.handleMessage(data, this.roomCode);
+                    });
+
+                    conn.on('close', () => {
+                        this.handleDisconnection(this.roomCode);
+                    });
+
+                    resolve(true);
+                });
+
+                conn.on('error', (err) => {
+                    console.error('Connection error:', err);
+                    if (this.onConnectionError) {
+                        this.onConnectionError('Could not connect to room');
+                    }
+                    reject(err);
+                });
             });
 
-            // Encode answer
-            const answerData = {
-                type: 'answer',
-                connectionId: offerData.connectionId,
-                sdp: pc.localDescription,
-                candidates: iceCandidates,
-                playerInfo
-            };
+            this.peer.on('error', (err) => {
+                console.error('PeerJS error:', err);
+                let errorMsg = 'Connection error';
+                if (err.type === 'peer-unavailable') {
+                    errorMsg = 'Room not found. Check the code and try again.';
+                }
+                if (this.onConnectionError) {
+                    this.onConnectionError(errorMsg);
+                }
+                reject(new Error(errorMsg));
+            });
 
-            return this.encodeConnectionData(answerData);
-        } catch (error) {
-            console.error('Error joining room:', error);
-            if (this.onConnectionError) {
-                this.onConnectionError(error.message);
-            }
-            return null;
-        }
-    },
-
-    // Setup data channel handlers
-    setupDataChannel(dc, connectionId) {
-        dc.onopen = () => {
-            console.log('Data channel opened:', connectionId);
-
-            // Update connection with data channel
-            const conn = this.connections.find(c => c.id === connectionId);
-            if (conn) {
-                conn.dc = dc;
-            }
-
-            if (this.onConnectionReady) {
-                this.onConnectionReady(connectionId);
-            }
-        };
-
-        dc.onclose = () => {
-            console.log('Data channel closed:', connectionId);
-            this.handleDisconnection(connectionId);
-        };
-
-        dc.onerror = (error) => {
-            console.error('Data channel error:', error);
-            if (this.onConnectionError) {
-                this.onConnectionError('Connection error');
-            }
-        };
-
-        dc.onmessage = (event) => {
-            this.handleMessage(event.data, connectionId);
-        };
+            // Timeout after 10 seconds
+            setTimeout(() => {
+                if (this.connections.length === 0) {
+                    reject(new Error('Connection timeout'));
+                }
+            }, 10000);
+        });
     },
 
     // Handle incoming messages
-    handleMessage(data, fromConnectionId) {
+    handleMessage(data, fromPeerId) {
         try {
-            const message = JSON.parse(data);
+            switch (data.type) {
+                case 'requestInfo':
+                    // Host is requesting our info
+                    this.sendTo(fromPeerId, {
+                        type: 'playerInfo',
+                        info: this.guestInfo
+                    });
+                    break;
 
-            switch (message.type) {
+                case 'playerInfo':
+                    // Update player info
+                    const conn = this.connections.find(c => c.id === fromPeerId);
+                    if (conn) {
+                        conn.playerInfo = data.info;
+                        if (this.onPlayerJoined) {
+                            this.onPlayerJoined({
+                                odlayerId: conn.playerId,
+                                playerInfo: data.info
+                            });
+                        }
+                    }
+                    if (this.onConnectionReady) {
+                        this.onConnectionReady(fromPeerId);
+                    }
+                    break;
+
                 case 'gameState':
                     if (this.onGameStateReceived) {
-                        this.onGameStateReceived(message.state);
+                        this.onGameStateReceived(data.state);
                     }
                     break;
 
                 case 'action':
                     if (this.onActionReceived) {
-                        this.onActionReceived(message.action, message.playerId);
+                        this.onActionReceived(data.action, data.playerId);
                     }
                     break;
 
                 case 'chat':
                     if (this.onChatReceived) {
-                        this.onChatReceived(message.text, message.playerId);
+                        this.onChatReceived(data.text, data.playerId);
                     }
                     break;
 
-                case 'playerInfo':
-                    // Update player info
-                    const conn = this.connections.find(c => c.id === fromConnectionId);
-                    if (conn) {
-                        conn.playerInfo = message.info;
-                        if (this.onPlayerJoined) {
-                            this.onPlayerJoined({
-                                playerId: conn.playerId,
-                                playerInfo: message.info
-                            });
-                        }
+                case 'assignPlayerId':
+                    this.localPlayerId = data.playerId;
+                    console.log('Assigned player ID:', this.localPlayerId);
+                    break;
+
+                case 'gameStart':
+                    if (this.onGameStart) {
+                        this.onGameStart(data.state);
                     }
                     break;
 
                 default:
-                    console.log('Unknown message type:', message.type);
+                    console.log('Unknown message type:', data.type);
             }
         } catch (error) {
             console.error('Error handling message:', error);
@@ -337,8 +259,8 @@ const MonopolyMultiplayer = {
     },
 
     // Handle disconnection
-    handleDisconnection(connectionId) {
-        const index = this.connections.findIndex(c => c.id === connectionId);
+    handleDisconnection(peerId) {
+        const index = this.connections.findIndex(c => c.id === peerId);
         if (index !== -1) {
             const conn = this.connections[index];
             this.connections.splice(index, 1);
@@ -351,19 +273,18 @@ const MonopolyMultiplayer = {
 
     // Send message to all connected peers
     broadcast(message) {
-        const data = JSON.stringify(message);
         for (const conn of this.connections) {
-            if (conn.dc && conn.dc.readyState === 'open') {
-                conn.dc.send(data);
+            if (conn.conn && conn.conn.open) {
+                conn.conn.send(message);
             }
         }
     },
 
     // Send message to specific peer
-    sendTo(connectionId, message) {
-        const conn = this.connections.find(c => c.id === connectionId);
-        if (conn && conn.dc && conn.dc.readyState === 'open') {
-            conn.dc.send(JSON.stringify(message));
+    sendTo(peerId, message) {
+        const conn = this.connections.find(c => c.id === peerId);
+        if (conn && conn.conn && conn.conn.open) {
+            conn.conn.send(message);
         }
     },
 
@@ -384,13 +305,7 @@ const MonopolyMultiplayer = {
             playerId: this.localPlayerId
         };
 
-        if (this.isHost) {
-            // Host processes locally and broadcasts
-            this.broadcast(message);
-        } else {
-            // Guest sends to host
-            this.broadcast(message);
-        }
+        this.broadcast(message);
     },
 
     // Send chat message
@@ -402,27 +317,29 @@ const MonopolyMultiplayer = {
         });
     },
 
-    // Encode connection data to shareable string
-    encodeConnectionData(data) {
-        try {
-            const json = JSON.stringify(data);
-            // Use base64 encoding
-            return btoa(encodeURIComponent(json));
-        } catch (error) {
-            console.error('Error encoding connection data:', error);
-            return null;
-        }
+    // Assign player IDs to connected players (host only)
+    assignPlayerIds() {
+        if (!this.isHost) return;
+
+        this.connections.forEach((conn, index) => {
+            const playerId = index + 1;
+            conn.playerId = playerId;
+            this.sendTo(conn.id, {
+                type: 'assignPlayerId',
+                playerId: playerId
+            });
+        });
     },
 
-    // Decode connection data from string
-    decodeConnectionData(encoded) {
-        try {
-            const json = decodeURIComponent(atob(encoded));
-            return JSON.parse(json);
-        } catch (error) {
-            console.error('Error decoding connection data:', error);
-            return null;
-        }
+    // Start the game (host only)
+    startGame(state) {
+        if (!this.isHost) return;
+
+        this.assignPlayerIds();
+        this.broadcast({
+            type: 'gameStart',
+            state
+        });
     },
 
     // Check if we're in online mode
@@ -432,98 +349,31 @@ const MonopolyMultiplayer = {
 
     // Get connected player count
     getConnectedCount() {
-        return this.connections.filter(c => c.dc && c.dc.readyState === 'open').length;
+        return this.connections.filter(c => c.conn && c.conn.open).length;
+    },
+
+    // Get all connected player info
+    getConnectedPlayers() {
+        return this.connections
+            .filter(c => c.conn && c.conn.open && c.playerInfo)
+            .map(c => ({
+                playerId: c.playerId,
+                ...c.playerInfo
+            }));
     },
 
     // Cleanup
     disconnect() {
-        for (const conn of this.connections) {
-            if (conn.dc) {
-                conn.dc.close();
-            }
-            if (conn.pc) {
-                conn.pc.close();
-            }
+        if (this.peer) {
+            this.peer.destroy();
+            this.peer = null;
         }
         this.connections = [];
-
-        if (this.pendingConnections) {
-            for (const [id, pending] of this.pendingConnections) {
-                if (pending.dc) pending.dc.close();
-                if (pending.pc) pending.pc.close();
-            }
-            this.pendingConnections.clear();
-        }
-
         this.mode = 'local';
         this.isHost = false;
         this.roomCode = null;
     }
 };
 
-// Alternative simple approach using clipboard for signaling
-const SimpleSignaling = {
-    // Store the current offer/answer for copy
-    currentOffer: null,
-    currentAnswer: null,
-
-    // Create a shareable game invite (host)
-    async createInvite(hostInfo) {
-        MonopolyMultiplayer.initAsHost(hostInfo);
-        const offerCode = await MonopolyMultiplayer.createOffer();
-        this.currentOffer = offerCode;
-        return {
-            roomCode: MonopolyMultiplayer.roomCode,
-            offerCode
-        };
-    },
-
-    // Join with invite code (guest)
-    async joinWithInvite(offerCode, guestInfo) {
-        const answerCode = await MonopolyMultiplayer.initAsGuest(offerCode, guestInfo);
-        this.currentAnswer = answerCode;
-        return answerCode;
-    },
-
-    // Complete connection (host receives answer)
-    async completeConnection(answerCode) {
-        return await MonopolyMultiplayer.processAnswer(answerCode);
-    },
-
-    // Copy to clipboard helper
-    async copyToClipboard(text) {
-        try {
-            await navigator.clipboard.writeText(text);
-            return true;
-        } catch (error) {
-            // Fallback for older browsers
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.select();
-            try {
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-                return true;
-            } catch (e) {
-                document.body.removeChild(textarea);
-                return false;
-            }
-        }
-    },
-
-    // Paste from clipboard helper
-    async pasteFromClipboard() {
-        try {
-            return await navigator.clipboard.readText();
-        } catch (error) {
-            return null;
-        }
-    }
-};
-
 // Export for use in main game
 window.MonopolyMultiplayer = MonopolyMultiplayer;
-window.SimpleSignaling = SimpleSignaling;

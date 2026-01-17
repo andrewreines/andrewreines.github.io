@@ -84,16 +84,16 @@
                             </div>
                         </div>
                         <button id="generate-room-btn" class="btn btn-primary">
-                            <i class="fas fa-key"></i> Generate Room Code
+                            <i class="fas fa-key"></i> Create Room
                         </button>
                         <div id="room-code-display" class="room-code-display hidden">
-                            <p>Share this code with friends:</p>
+                            <p>Share this 12-character code with friends:</p>
                             <div class="room-code" id="room-code"></div>
                             <button id="copy-code-btn" class="btn btn-small">
-                                <i class="fas fa-copy"></i> Copy
+                                <i class="fas fa-copy"></i> Copy Code
                             </button>
                             <div id="waiting-players" class="waiting-players">
-                                <p>Waiting for players...</p>
+                                <p>Waiting for players to join...</p>
                                 <ul id="connected-players"></ul>
                             </div>
                             <button id="start-online-btn" class="btn btn-primary btn-large" disabled>
@@ -116,11 +116,11 @@
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="room-code-input">Room Code</label>
-                            <input type="text" id="room-code-input" placeholder="Enter room code" maxlength="6">
+                            <label for="room-code-input">Room Code (12 characters)</label>
+                            <input type="text" id="room-code-input" placeholder="Enter 12-character code" maxlength="12" style="text-transform: uppercase; letter-spacing: 2px;">
                         </div>
                         <button id="connect-room-btn" class="btn btn-primary">
-                            <i class="fas fa-plug"></i> Connect
+                            <i class="fas fa-plug"></i> Join Room
                         </button>
                         <div id="join-status" class="join-status hidden">
                             <p id="join-status-text">Connecting...</p>
@@ -401,6 +401,7 @@
     </div>
 
     <!-- Scripts -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="assets/js/monopoly-data.js"></script>
     <script src="assets/js/monopoly-multiplayer.js"></script>
     <script src="assets/js/monopoly.js"></script>
