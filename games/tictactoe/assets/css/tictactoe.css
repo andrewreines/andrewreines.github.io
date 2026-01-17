@@ -630,9 +630,60 @@ body {
 }
 
 /* Code Entry Panel */
-#code-entry-panel .form-group input {
+#code-entry-panel .form-group input,
+#join-game-panel .form-group input {
     text-align: center;
     font-size: 1.2rem;
+}
+
+/* QR Code Container */
+.qr-code-container {
+    margin: 20px 0;
+    text-align: center;
+}
+
+#qr-code {
+    display: inline-block;
+    padding: 10px;
+    background: #fff;
+    border-radius: 12px;
+}
+
+#qr-code canvas {
+    display: block;
+}
+
+.qr-hint {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 10px;
+}
+
+/* Share Options */
+.share-options {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 15px;
+}
+
+.share-options .btn-small {
+    flex: 1;
+    max-width: 150px;
+}
+
+/* Join Game Panel */
+#join-game-panel {
+    text-align: center;
+}
+
+#join-game-panel .form-group {
+    text-align: left;
+}
+
+#back-from-join-btn {
+    margin-top: 15px;
+    width: 100%;
 }
 
 /* Online Options Panel - first panel has no top border */

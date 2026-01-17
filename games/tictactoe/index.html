@@ -74,32 +74,39 @@
                         </div>
                         <div class="online-options">
                             <button id="host-game-btn" class="btn btn-primary">
-                                <i class="fas fa-broadcast-tower"></i> Host a Game
+                                <i class="fas fa-plus-circle"></i> Create Room
                             </button>
-                            <button id="find-games-btn" class="btn btn-secondary">
-                                <i class="fas fa-search-location"></i> Find Nearby Games
+                            <button id="join-game-btn" class="btn btn-secondary">
+                                <i class="fas fa-sign-in-alt"></i> Join Room
                             </button>
-                        </div>
-                        <div class="manual-option">
-                            <span>Have a room code?</span>
-                            <button id="show-code-btn" class="btn btn-link">Enter code manually</button>
                         </div>
                     </div>
 
                     <!-- Host Game Panel -->
                     <div id="host-game-panel" class="online-panel hidden">
-                        <h3><i class="fas fa-broadcast-tower"></i> Hosting Game</h3>
+                        <h3><i class="fas fa-broadcast-tower"></i> Your Room</h3>
                         <div id="host-status" class="host-status">
                             <i class="fas fa-spinner fa-spin"></i> Creating room...
                         </div>
                         <div id="host-info" class="host-info hidden">
-                            <p class="host-waiting"><i class="fas fa-spinner fa-spin"></i> Waiting for nearby players to join...</p>
-                            <p class="host-hint">Other players can find your game by clicking "Find Nearby Games"</p>
-                            <div class="room-code-fallback">
-                                <p>Or share this code:</p>
+                            <p class="host-waiting"><i class="fas fa-hourglass-half"></i> Waiting for opponent to join...</p>
+
+                            <div class="room-code-display">
+                                <label>Room Code</label>
                                 <div class="room-code" id="host-room-code"></div>
-                                <button id="copy-host-code-btn" class="btn btn-small">
-                                    <i class="fas fa-copy"></i> Copy
+                            </div>
+
+                            <div class="qr-code-container">
+                                <div id="qr-code"></div>
+                                <p class="qr-hint">Scan to join instantly</p>
+                            </div>
+
+                            <div class="share-options">
+                                <button id="copy-code-btn" class="btn btn-small">
+                                    <i class="fas fa-copy"></i> Copy Code
+                                </button>
+                                <button id="share-link-btn" class="btn btn-small">
+                                    <i class="fas fa-share-alt"></i> Share Link
                                 </button>
                             </div>
                         </div>
@@ -108,33 +115,18 @@
                         </button>
                     </div>
 
-                    <!-- Find Games Panel -->
-                    <div id="find-games-panel" class="online-panel hidden">
-                        <h3><i class="fas fa-search-location"></i> Finding Nearby Games</h3>
-                        <div id="find-status" class="find-status">
-                            <i class="fas fa-spinner fa-spin"></i> Searching for nearby games...
-                        </div>
-                        <div id="games-list" class="games-list hidden"></div>
-                        <button id="refresh-games-btn" class="btn btn-secondary hidden">
-                            <i class="fas fa-sync-alt"></i> Search Again
-                        </button>
-                        <button id="cancel-find-btn" class="btn btn-link">
-                            <i class="fas fa-arrow-left"></i> Back
-                        </button>
-                    </div>
-
-                    <!-- Manual Code Entry Panel -->
-                    <div id="code-entry-panel" class="online-panel hidden">
-                        <h3>Enter Room Code</h3>
+                    <!-- Join Game Panel -->
+                    <div id="join-game-panel" class="online-panel hidden">
+                        <h3><i class="fas fa-sign-in-alt"></i> Join Room</h3>
                         <div class="form-group">
-                            <label>Room Code (12 characters)</label>
-                            <input type="text" id="room-code-input" placeholder="Enter code" maxlength="12">
+                            <label>Room Code (6 characters)</label>
+                            <input type="text" id="room-code-input" placeholder="ABC123" maxlength="6" autocomplete="off" autocapitalize="characters">
                         </div>
                         <button id="connect-room-btn" class="btn btn-primary">
                             <i class="fas fa-plug"></i> Join Room
                         </button>
                         <div id="join-status" class="join-status hidden"></div>
-                        <button id="back-from-code-btn" class="btn btn-link">
+                        <button id="back-from-join-btn" class="btn btn-link">
                             <i class="fas fa-arrow-left"></i> Back
                         </button>
                     </div>
@@ -194,6 +186,7 @@
     </div>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script src="../assets/js/multiplayer.js"></script>
     <script src="assets/js/tictactoe.js"></script>
 </body>
