@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Framework Tests</title>
+    <link rel="stylesheet" href="assets/css/games.css">
+    <style>
+        .test-container {
+            max-width: 800px;
+            padding: 1rem;
+        }
+        .test-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .test-section h3 {
+            margin-bottom: 1rem;
+            color: #3498db;
+        }
+        .test-result {
+            padding: 0.5rem;
+            margin: 0.25rem 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .test-pass {
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+        }
+        .test-fail {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+        .test-info {
+            background: rgba(52, 152, 219, 0.2);
+            color: #3498db;
+        }
+        .test-log {
+            background: rgba(0,0,0,0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 1rem;
+        }
+        .controls {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .room-display {
+            font-family: monospace;
+            font-size: 1.5rem;
+            color: #3498db;
+            padding: 0.5rem;
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+            margin: 0.5rem 0;
+        }
+    </style>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+    <div class="container test-container">
+        <div class="header">
+            <h1>Multiplayer Tests</h1>
+            <p class="subtitle">Test the multiplayer framework</p>
+        </div>
+
+        <!-- Unit Tests -->
+        <div class="test-section">
+            <h3>Unit Tests</h3>
+            <div class="controls">
+                <button class="btn btn-primary btn-small" onclick="runUnitTests()">Run Unit Tests</button>
+            </div>
+            <div id="unit-test-results"></div>
+        </div>
+
+        <!-- Manual Testing -->
+        <div class="test-section">
+            <h3>Manual Connection Test</h3>
+            <div class="form-group">
+                <label>Your Name</label>
+                <input type="text" id="test-name" class="input" value="Tester" maxlength="20">
+            </div>
+            <div class="controls">
+                <button class="btn btn-success btn-small" onclick="testCreateRoom()">Create Room</button>
+                <button class="btn btn-primary btn-small" onclick="testJoinRoom()">Join Room</button>
+                <button class="btn btn-danger btn-small" onclick="testDisconnect()">Disconnect</button>
+            </div>
+            <div class="form-group">
+                <label>Room Code (for joining)</label>
+                <input type="text" id="test-room-code" class="input input-code" placeholder="ABCDEF" maxlength="6">
+            </div>
+            <div id="room-status"></div>
+            <div class="controls">
+                <button class="btn btn-secondary btn-small" onclick="testSendMessage()">Send Test Message</button>
+                <button class="btn btn-secondary btn-small" onclick="testSendState()">Send Test State</button>
+            </div>
+            <div class="test-log" id="connection-log"></div>
+        </div>
+
+        <!-- Timeout Test -->
+        <div class="test-section">
+            <h3>Timeout Test</h3>
+            <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 1rem;">
+                Test connection timeout by trying to join a non-existent room.
+            </p>
+            <div class="controls">
+                <button class="btn btn-secondary btn-small" onclick="testTimeout()">Test Timeout (10s)</button>
+            </div>
+            <div id="timeout-status"></div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="test-section">
+            <h3>Manual Test Scenarios</h3>
+            <ol style="padding-left: 1.25rem; color: #aaa; font-size: 0.9rem;">
+                <li><strong>Double-tap zoom:</strong> Rapidly double-tap buttons - should NOT zoom</li>
+                <li><strong>Connection timeout:</strong> Click "Test Timeout" - should error after 10s</li>
+                <li><strong>Room creation:</strong> Create room, note 6-char code appears</li>
+                <li><strong>Join room:</strong> Open in another tab/device, join with code</li>
+                <li><strong>Messaging:</strong> Send test messages between connections</li>
+                <li><strong>Late joiner:</strong> Start chat, then have someone join - should go to chat</li>
+                <li><strong>Disconnect:</strong> Host disconnect should notify guests</li>
+            </ol>
+        </div>
+
+        <a href="./" class="btn btn-secondary btn-large mt-2">← Back to Games</a>
+    </div>
+
+    <script src="assets/js/multiplayer.js"></script>
+    <script>
+        var testRoom = null;
+        var testResults = [];
+
+        // Unit Tests
+        function runUnitTests() {
+            testResults = [];
+            var resultsEl = document.getElementById('unit-test-results');
+            resultsEl.innerHTML = '';
+
+            // Test 1: Room code generation
+            test('Room code is 6 characters', function() {
+                var code = generateRoomCode();
+                return code.length === 6;
+            });
+
+            // Test 2: Room code has valid characters
+            test('Room code uses valid chars (no 0,1,I,O)', function() {
+                var code = generateRoomCode();
+                return !/[01IO]/.test(code) && /^[A-Z2-9]+$/.test(code);
+            });
+
+            // Test 3: Room codes are unique
+            test('Room codes are unique (100 samples)', function() {
+                var codes = new Set();
+                for (var i = 0; i < 100; i++) {
+                    codes.add(generateRoomCode());
+                }
+                return codes.size >= 95; // Allow for tiny chance of collision
+            });
+
+            // Test 4: MultiplayerRoom constructor
+            test('MultiplayerRoom initializes with defaults', function() {
+                var r = new MultiplayerRoom({});
+                return r.maxPlayers === 10 &&
+                       r.playerName === 'Player' &&
+                       r.connectionTimeout === 10000 &&
+                       r.isConnected === false;
+            });
+
+            // Test 5: MultiplayerRoom custom options
+            test('MultiplayerRoom accepts custom options', function() {
+                var r = new MultiplayerRoom({
+                    maxPlayers: 5,
+                    playerName: 'Test',
+                    connectionTimeout: 5000
+                });
+                return r.maxPlayers === 5 &&
+                       r.playerName === 'Test' &&
+                       r.connectionTimeout === 5000;
+            });
+
+            // Test 6: Player ID generation
+            test('Player IDs are unique', function() {
+                var r1 = new MultiplayerRoom({});
+                var r2 = new MultiplayerRoom({});
+                return r1.playerId !== r2.playerId;
+            });
+
+            // Test 7: Callbacks are set
+            test('Event callbacks are functions', function() {
+                var r = new MultiplayerRoom({});
+                return typeof r.onRoomCreated === 'function' &&
+                       typeof r.onError === 'function' &&
+                       typeof r.onMessage === 'function';
+            });
+
+            // Display results
+            testResults.forEach(function(result) {
+                var div = document.createElement('div');
+                div.className = 'test-result ' + (result.pass ? 'test-pass' : 'test-fail');
+                div.textContent = (result.pass ? '✓' : '✗') + ' ' + result.name;
+                resultsEl.appendChild(div);
+            });
+
+            var passed = testResults.filter(function(r) { return r.pass; }).length;
+            var total = testResults.length;
+            var summary = document.createElement('div');
+            summary.className = 'test-result test-info';
+            summary.textContent = 'Passed: ' + passed + '/' + total;
+            resultsEl.appendChild(summary);
+        }
+
+        function test(name, fn) {
+            try {
+                var result = fn();
+                testResults.push({ name: name, pass: result });
+            } catch (e) {
+                testResults.push({ name: name, pass: false, error: e.message });
+            }
+        }
+
+        // Connection Logging
+        function log(message, type) {
+            var logEl = document.getElementById('connection-log');
+            var time = new Date().toLocaleTimeString();
+            var div = document.createElement('div');
+            div.className = 'test-result ' + (type || 'test-info');
+            div.textContent = '[' + time + '] ' + message;
+            logEl.insertBefore(div, logEl.firstChild);
+        }
+
+        function updateStatus(html) {
+            document.getElementById('room-status').innerHTML = html;
+        }
+
+        // Manual Tests
+        function testCreateRoom() {
+            if (testRoom) {
+                testRoom.disconnect();
+            }
+
+            var name = document.getElementById('test-name').value.trim() || 'Tester';
+            log('Creating room as "' + name + '"...');
+
+            testRoom = new MultiplayerRoom({
+                maxPlayers: 10,
+                playerName: name
+            });
+
+            testRoom.onRoomCreated = function(code) {
+                log('Room created! Code: ' + code, 'test-pass');
+                updateStatus('<div class="room-display">Room: ' + code + '</div>' +
+                    '<p class="text-muted">Players: ' + testRoom.getPlayerCount() + '</p>');
+            };
+
+            testRoom.onPlayerJoined = function(player) {
+                log('Player joined: ' + player.name, 'test-pass');
+                updateStatus('<div class="room-display">Room: ' + testRoom.roomCode + '</div>' +
+                    '<p class="text-muted">Players: ' + testRoom.getPlayerCount() + '</p>');
+            };
+
+            testRoom.onPlayerLeft = function(player) {
+                log('Player left: ' + player.name, 'test-info');
+            };
+
+            testRoom.onMessage = function(type, data, from) {
+                log('Message [' + type + '] from ' + from.name + ': ' + JSON.stringify(data), 'test-info');
+            };
+
+            testRoom.onStateUpdate = function(state, from) {
+                log('State update from ' + from.name + ': ' + JSON.stringify(state), 'test-info');
+            };
+
+            testRoom.onError = function(err) {
+                log('Error: ' + err.message, 'test-fail');
+                updateStatus('<p class="text-muted">Not connected</p>');
+            };
+
+            testRoom.onDisconnected = function(reason) {
+                log('Disconnected: ' + reason, 'test-fail');
+                updateStatus('<p class="text-muted">Disconnected</p>');
+            };
+
+            testRoom.createRoom();
+        }
+
+        function testJoinRoom() {
+            if (testRoom) {
+                testRoom.disconnect();
+            }
+
+            var code = document.getElementById('test-room-code').value.trim().toUpperCase();
+            if (code.length !== 6) {
+                log('Please enter a 6-character room code', 'test-fail');
+                return;
+            }
+
+            var name = document.getElementById('test-name').value.trim() || 'Tester';
+            log('Joining room ' + code + ' as "' + name + '"...');
+
+            testRoom = new MultiplayerRoom({
+                playerName: name
+            });
+
+            testRoom.onJoinedRoom = function(roomCode, players) {
+                log('Joined room ' + roomCode + '! Players: ' + Object.keys(players).length, 'test-pass');
+                updateStatus('<div class="room-display">Room: ' + roomCode + '</div>' +
+                    '<p class="text-muted">Players: ' + testRoom.getPlayerCount() + '</p>');
+            };
+
+            testRoom.onPlayerJoined = function(player) {
+                log('Player joined: ' + player.name, 'test-pass');
+            };
+
+            testRoom.onPlayerLeft = function(player) {
+                log('Player left: ' + player.name, 'test-info');
+            };
+
+            testRoom.onMessage = function(type, data, from) {
+                log('Message [' + type + '] from ' + from.name + ': ' + JSON.stringify(data), 'test-info');
+            };
+
+            testRoom.onStateUpdate = function(state, from) {
+                log('State update from ' + from.name + ': ' + JSON.stringify(state), 'test-info');
+            };
+
+            testRoom.onError = function(err) {
+                log('Error: ' + err.message, 'test-fail');
+                updateStatus('<p class="text-muted">Not connected</p>');
+            };
+
+            testRoom.onDisconnected = function(reason) {
+                log('Disconnected: ' + reason, 'test-fail');
+                updateStatus('<p class="text-muted">Disconnected</p>');
+            };
+
+            testRoom.joinRoom(code);
+        }
+
+        function testDisconnect() {
+            if (testRoom) {
+                log('Disconnecting...');
+                testRoom.disconnect();
+                testRoom = null;
+                updateStatus('<p class="text-muted">Disconnected</p>');
+            } else {
+                log('Not connected', 'test-fail');
+            }
+        }
+
+        function testSendMessage() {
+            if (!testRoom || !testRoom.isConnected) {
+                log('Not connected to a room', 'test-fail');
+                return;
+            }
+            var msg = { timestamp: Date.now(), test: true };
+            testRoom.sendMessage('test', msg);
+            log('Sent message: ' + JSON.stringify(msg), 'test-pass');
+        }
+
+        function testSendState() {
+            if (!testRoom || !testRoom.isConnected) {
+                log('Not connected to a room', 'test-fail');
+                return;
+            }
+            var state = { counter: Math.floor(Math.random() * 100), updated: Date.now() };
+            testRoom.sendState(state);
+            log('Sent state: ' + JSON.stringify(state), 'test-pass');
+        }
+
+        // Timeout Test
+        function testTimeout() {
+            var statusEl = document.getElementById('timeout-status');
+            statusEl.innerHTML = '<div class="test-result test-info">Testing timeout with fake room code...</div>';
+
+            var startTime = Date.now();
+            var timeoutRoom = new MultiplayerRoom({
+                playerName: 'TimeoutTest',
+                connectionTimeout: 10000
+            });
+
+            timeoutRoom.onJoinedRoom = function() {
+                var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                statusEl.innerHTML = '<div class="test-result test-fail">Unexpectedly joined! (' + elapsed + 's)</div>';
+            };
+
+            timeoutRoom.onError = function(err) {
+                var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                if (err.type === 'timeout') {
+                    statusEl.innerHTML = '<div class="test-result test-pass">Timeout worked correctly after ' + elapsed + 's</div>';
+                } else if (err.type === 'room_not_found') {
+                    statusEl.innerHTML = '<div class="test-result test-pass">Room not found (fast fail) after ' + elapsed + 's</div>';
+                } else {
+                    statusEl.innerHTML = '<div class="test-result test-info">Error: ' + err.message + ' (' + elapsed + 's)</div>';
+                }
+                timeoutRoom.disconnect();
+            };
+
+            // Use a random code that almost certainly doesn't exist
+            timeoutRoom.joinRoom('ZZZZZZ');
+        }
+
+        // Auto-uppercase room code
+        document.getElementById('test-room-code').addEventListener('input', function(e) {
+            e.target.value = e.target.value.toUpperCase();
+        });
+
+        // Initialize
+        updateStatus('<p class="text-muted">Not connected</p>');
+    </script>
+</body>
+</html>
