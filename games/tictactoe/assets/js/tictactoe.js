@@ -241,16 +241,22 @@ class TicTacToe {
         // Show host panel
         if (this.ui.onlineOptionsPanel) this.ui.onlineOptionsPanel.classList.add('hidden');
         if (this.ui.hostGamePanel) this.ui.hostGamePanel.classList.remove('hidden');
-        if (this.ui.hostStatus) this.ui.hostStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Getting your location...';
+        if (this.ui.hostStatus) this.ui.hostStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating room...';
         if (this.ui.hostInfo) this.ui.hostInfo.classList.add('hidden');
 
         try {
-            // Get location and create proximity-based room
-            const location = await this.multiplayer.getLocation();
-            if (this.ui.hostStatus) this.ui.hostStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating room...';
+            let roomCode;
 
-            const proximityCode = this.multiplayer.generateProximityCode(location.lat, location.lng);
-            const roomCode = await this.multiplayer.initAsHostWithCode(proximityCode, { name: playerName });
+            // Try to get location for proximity-based matching
+            try {
+                const location = await this.multiplayer.getLocation();
+                const proximityCode = this.multiplayer.generateProximityCode(location.lat, location.lng);
+                roomCode = await this.multiplayer.initAsHostWithCode(proximityCode, { name: playerName });
+            } catch (locationErr) {
+                // Location unavailable - use random room code instead
+                console.log('Location unavailable, using random room code:', locationErr.message);
+                roomCode = await this.multiplayer.initAsHost({ name: playerName });
+            }
 
             this.localPlayerId = 0;
             if (this.ui.hostStatus) this.ui.hostStatus.classList.add('hidden');
@@ -298,8 +304,20 @@ class TicTacToe {
         if (this.ui.gamesList) this.ui.gamesList.classList.add('hidden');
         if (this.ui.refreshGamesBtn) this.ui.refreshGamesBtn.classList.add('hidden');
 
+        let location;
         try {
-            const location = await this.multiplayer.getLocation();
+            location = await this.multiplayer.getLocation();
+        } catch (locationErr) {
+            // Location unavailable - guide user to use room code instead
+            console.log('Location unavailable for nearby search:', locationErr.message);
+            if (this.ui.findStatus) {
+                this.ui.findStatus.innerHTML = '<i class="fas fa-info-circle"></i> Location unavailable. Ask the host for their room code and use "Enter Code" to join.';
+            }
+            if (this.ui.refreshGamesBtn) this.ui.refreshGamesBtn.classList.remove('hidden');
+            return;
+        }
+
+        try {
             if (this.ui.findStatus) this.ui.findStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching for nearby games...';
 
             // Get all proximity codes to search
