@@ -53,11 +53,45 @@ class GameMultiplayer {
         this.roomCode = this.generateRoomCode();
 
         return new Promise((resolve, reject) => {
-            this.peer = new Peer(this.roomCode, { debug: 0 });
+            let timeoutId = null;
+            let settled = false;
+
+            const cleanup = () => {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+            };
+
+            const safeResolve = (value) => {
+                if (!settled) {
+                    settled = true;
+                    cleanup();
+                    resolve(value);
+                }
+            };
+
+            const safeReject = (err) => {
+                if (!settled) {
+                    settled = true;
+                    cleanup();
+                    reject(err);
+                }
+            };
+
+            this.peer = new Peer(this.roomCode, {
+                debug: 0,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
 
             this.peer.on('open', (id) => {
                 console.log('Host ready:', id);
-                resolve(this.roomCode);
+                safeResolve(this.roomCode);
             });
 
             this.peer.on('connection', (conn) => {
@@ -67,22 +101,23 @@ class GameMultiplayer {
             this.peer.on('error', (err) => {
                 console.error('PeerJS error:', err);
                 if (err.type === 'unavailable-id') {
+                    cleanup();
                     this.roomCode = this.generateRoomCode();
                     this.peer.destroy();
-                    this.initAsHost(playerInfo).then(resolve).catch(reject);
+                    this.initAsHost(playerInfo).then(safeResolve).catch(safeReject);
                 } else {
                     if (this.onConnectionError) {
                         this.onConnectionError(err.message || 'Connection error');
                     }
-                    reject(err);
+                    safeReject(err);
                 }
             });
 
-            setTimeout(() => {
+            timeoutId = setTimeout(() => {
                 if (!this.peer || !this.peer.open) {
-                    reject(new Error('Connection timeout'));
+                    safeReject(new Error('Connection timeout'));
                 }
-            }, 10000);
+            }, 15000);
         });
     }
 
@@ -118,7 +153,41 @@ class GameMultiplayer {
         this.roomCode = roomCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
         return new Promise((resolve, reject) => {
-            this.peer = new Peer({ debug: 0 });
+            let timeoutId = null;
+            let settled = false;
+
+            const cleanup = () => {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+            };
+
+            const safeResolve = (value) => {
+                if (!settled) {
+                    settled = true;
+                    cleanup();
+                    resolve(value);
+                }
+            };
+
+            const safeReject = (err) => {
+                if (!settled) {
+                    settled = true;
+                    cleanup();
+                    reject(err);
+                }
+            };
+
+            this.peer = new Peer({
+                debug: 0,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
 
             this.peer.on('open', () => {
                 const conn = this.peer.connect(this.roomCode, { reliable: true });
@@ -133,14 +202,14 @@ class GameMultiplayer {
 
                     conn.on('data', (data) => this.handleMessage(data, this.roomCode));
                     conn.on('close', () => this.handleDisconnection(this.roomCode));
-                    resolve(true);
+                    safeResolve(true);
                 });
 
                 conn.on('error', (err) => {
                     if (this.onConnectionError) {
                         this.onConnectionError('Could not connect to room');
                     }
-                    reject(err);
+                    safeReject(err);
                 });
             });
 
@@ -152,14 +221,14 @@ class GameMultiplayer {
                 if (this.onConnectionError) {
                     this.onConnectionError(errorMsg);
                 }
-                reject(new Error(errorMsg));
+                safeReject(new Error(errorMsg));
             });
 
-            setTimeout(() => {
+            timeoutId = setTimeout(() => {
                 if (this.connections.length === 0) {
-                    reject(new Error('Connection timeout'));
+                    safeReject(new Error('Connection timeout'));
                 }
-            }, 10000);
+            }, 15000);
         });
     }
 
