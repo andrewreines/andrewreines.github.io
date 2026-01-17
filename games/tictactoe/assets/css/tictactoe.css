@@ -191,7 +191,6 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    margin-bottom: 15px;
 }
 
 .online-panel {
@@ -203,6 +202,12 @@ body {
 .online-panel h3 {
     font-size: 1rem;
     margin-bottom: 15px;
+}
+
+#online-options-panel {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
 }
 
 .form-group {
@@ -225,97 +230,71 @@ body {
     color: #fff;
     font-family: inherit;
     font-size: 16px;
-    text-transform: uppercase;
-    letter-spacing: 2px;
 }
 
-.room-code-display {
+#room-code-input {
     text-align: center;
-    margin-top: 15px;
-    padding: 15px;
-    background: rgba(52, 152, 219, 0.1);
-    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    font-size: 1.2rem;
+}
+
+/* Room Code Display */
+.room-code-display {
+    margin: 15px 0;
 }
 
 .room-code {
-    font-size: 1.5rem;
+    font-size: 1.8rem;
     font-weight: 700;
     color: var(--o-color);
-    margin: 15px 0;
     font-family: monospace;
-    letter-spacing: 4px;
-    padding: 15px 20px;
+    letter-spacing: 6px;
+    padding: 15px;
     background: rgba(0, 0, 0, 0.3);
     border-radius: 8px;
     border: 2px dashed rgba(52, 152, 219, 0.5);
     user-select: all;
 }
 
-.waiting-status {
-    margin-top: 15px;
-    color: rgba(255, 255, 255, 0.7);
-}
-
-.join-status {
-    margin-top: 15px;
+/* Status Messages */
+.status-message {
     padding: 15px;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 8px;
     text-align: center;
+    margin-bottom: 15px;
 }
 
-/* Proximity Mode */
-.proximity-desc {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 0.9rem;
-    margin-bottom: 20px;
-    text-align: center;
-}
-
-.proximity-status {
-    margin-top: 15px;
-    padding: 15px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.9);
-}
-
-.proximity-status i {
+.status-message i {
     margin-right: 8px;
 }
 
-.manual-option {
-    margin-top: 20px;
-    text-align: center;
-    padding-top: 15px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 0.9rem;
-}
-
-.btn-link {
-    background: none;
-    border: none;
-    color: var(--o-color);
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 0.9rem;
-    padding: 5px 10px;
-    text-decoration: underline;
-    min-height: auto;
-}
-
-.btn-link:hover {
-    color: #5dade2;
-}
-
-#manual-options {
+/* Host Info */
+.host-info {
+    background: rgba(52, 152, 219, 0.1);
+    border-radius: 12px;
+    padding: 20px;
     text-align: center;
 }
 
-#back-to-proximity-btn {
+.host-waiting {
+    margin-bottom: 15px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+#copy-code-btn {
+    width: 100%;
     margin-top: 15px;
+}
+
+/* Join Panel */
+#join-game-panel {
+    text-align: center;
+}
+
+#join-game-panel .form-group {
+    text-align: left;
 }
 
 /* Buttons */
@@ -352,10 +331,18 @@ body {
     font-size: 1.1rem;
 }
 
-.btn-small {
-    padding: 10px 14px;
-    font-size: 0.85rem;
-    min-height: 40px;
+.btn-link {
+    background: none;
+    border: none;
+    color: var(--o-color);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 10px;
+    text-decoration: underline;
+    min-height: auto;
+    width: 100%;
+    margin-top: 15px;
 }
 
 .icon-btn {
@@ -505,20 +492,6 @@ body {
     to { transform: scale(1.1); }
 }
 
-/* Win Line */
-.win-line {
-    position: absolute;
-    background: linear-gradient(135deg, var(--x-color), var(--o-color));
-    border-radius: 4px;
-    transform-origin: center;
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-.win-line.show {
-    opacity: 1;
-}
-
 /* Game Result */
 .game-result {
     margin-top: 20px;
@@ -547,163 +520,6 @@ body {
 
 .result-text.draw {
     color: rgba(255, 255, 255, 0.7);
-}
-
-/* Host Game Panel */
-.host-status,
-.find-status {
-    padding: 20px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.9);
-    margin-bottom: 15px;
-}
-
-.host-status i,
-.find-status i {
-    margin-right: 8px;
-}
-
-.host-info {
-    background: rgba(52, 152, 219, 0.1);
-    border-radius: 12px;
-    padding: 20px;
-    text-align: center;
-}
-
-.host-waiting {
-    font-size: 1.1rem;
-    margin-bottom: 10px;
-    color: #fff;
-}
-
-.host-hint {
-    font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.6);
-    margin-bottom: 20px;
-}
-
-.room-code-fallback {
-    padding-top: 15px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.room-code-fallback p {
-    font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.6);
-    margin-bottom: 10px;
-}
-
-/* Find Games Panel */
-.games-list {
-    margin: 15px 0;
-}
-
-.game-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-    margin-bottom: 10px;
-}
-
-.game-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.game-item-info {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.game-item-host {
-    font-weight: 600;
-}
-
-.game-item-distance {
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.6);
-}
-
-/* Code Entry Panel */
-#code-entry-panel .form-group input,
-#join-game-panel .form-group input {
-    text-align: center;
-    font-size: 1.2rem;
-}
-
-/* QR Code Container */
-.qr-code-container {
-    margin: 20px 0;
-    text-align: center;
-}
-
-#qr-code {
-    display: inline-block;
-    padding: 10px;
-    background: #fff;
-    border-radius: 12px;
-}
-
-#qr-code canvas {
-    display: block;
-}
-
-.qr-hint {
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.6);
-    margin-top: 10px;
-}
-
-/* Share Options */
-.share-options {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    margin-top: 15px;
-}
-
-.share-options .btn-small {
-    flex: 1;
-    max-width: 150px;
-}
-
-/* Join Game Panel */
-#join-game-panel {
-    text-align: center;
-}
-
-#join-game-panel .form-group {
-    text-align: left;
-}
-
-#back-from-join-btn {
-    margin-top: 15px;
-    width: 100%;
-}
-
-/* Online Options Panel - first panel has no top border */
-#online-options-panel {
-    border-top: none;
-    margin-top: 0;
-    padding-top: 0;
-}
-
-/* Cancel/Back buttons styling */
-#cancel-host-btn,
-#cancel-find-btn,
-#back-from-code-btn {
-    margin-top: 15px;
-    width: 100%;
-}
-
-#refresh-games-btn {
-    width: 100%;
-    margin-top: 10px;
 }
 
 /* Tablet+ */
