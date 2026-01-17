@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="64" fill="#1a1a2e"/>
+  <!-- Grid lines -->
+  <line x1="180" y1="80" x2="180" y2="432" stroke="#3a3a5e" stroke-width="12" stroke-linecap="round"/>
+  <line x1="332" y1="80" x2="332" y2="432" stroke="#3a3a5e" stroke-width="12" stroke-linecap="round"/>
+  <line x1="80" y1="180" x2="432" y2="180" stroke="#3a3a5e" stroke-width="12" stroke-linecap="round"/>
+  <line x1="80" y1="332" x2="432" y2="332" stroke="#3a3a5e" stroke-width="12" stroke-linecap="round"/>
+  <!-- X in top-left -->
+  <line x1="95" y1="95" x2="165" y2="165" stroke="#e94560" stroke-width="16" stroke-linecap="round"/>
+  <line x1="165" y1="95" x2="95" y2="165" stroke="#e94560" stroke-width="16" stroke-linecap="round"/>
+  <!-- O in center -->
+  <circle cx="256" cy="256" r="45" fill="none" stroke="#4ecca3" stroke-width="16"/>
+  <!-- X in bottom-right -->
+  <line x1="347" y1="347" x2="417" y2="417" stroke="#e94560" stroke-width="16" stroke-linecap="round"/>
+  <line x1="417" y1="347" x2="347" y2="417" stroke="#e94560" stroke-width="16" stroke-linecap="round"/>
+</svg>
